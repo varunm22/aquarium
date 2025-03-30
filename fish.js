@@ -1,31 +1,23 @@
 class Fish extends Inhabitant {
     constructor(x, y, z, size) {
-      super(x, y, z, size); // Use the base class constructor
-      this.dx = random(-1, 1); // Random horizontal movement speed
-      this.dy = random(-1, 1); // Random vertical movement speed
-      this.dz = random(-0.01, 0.01); // Random depth movement speed
+      let dx = random(-1, 1); // Random horizontal movement speed
+      let dy = random(-1, 1); // Random vertical movement speed
+      let dz = random(-1, 1); // Random depth movement speed
+      super(x, y, z, dx, dy, dz, size); // Use the base class constructor
     }
   
     update(inhabitants) {
-      // Update position based on velocity
-      this.x += this.dx;
-      this.y += this.dy;
-      this.z += this.dz;
-  
-      // Constrain position within the tank bounds
-      this.x = constrain(this.x, 150, 850); // Horizontal bounds
-      this.y = constrain(this.y, 150 + 0.1 * 500, 650); // Vertical bounds (90% of tank height)
-      this.z = constrain(this.z, 20, 400); // Depth bounds
-
       // React to other fish within the field of view
       const fish_in_view = [];
       for (let other of inhabitants) {
-        if (other !== this && this.isInFieldOfView(other, 360)) {
+        if (other !== this && this.isInFieldOfView(other, 90, 400)) {
           fish_in_view.push(other);
         }
       }
 
       this.reactToAllFish(fish_in_view);
+
+      super.update();
     }
 
 
@@ -38,9 +30,9 @@ class Fish extends Inhabitant {
         }
       }
       if (!can_see_user_fish) {
-        this.dx = random(-0.01, 0.01);
-        this.dy = random(-0.01, 0.01);
-        this.dz = random(-0.01, 0.01);
+        this.dx = random(-1, 1);
+        this.dy = random(-1, 1);
+        this.dz = random(-1, 1);
       }
     }
 
@@ -49,9 +41,7 @@ class Fish extends Inhabitant {
       // Basic behavior: move towards other fish if too far
       const distance = this.distanceTo(other);
       if (other instanceof UserFish) {
-        this.dx = Math.max(Math.min(this.dx + (other.x - this.x) * 0.001, 1), -1);
-        this.dy = Math.max(Math.min(this.dy + (other.y - this.y) * 0.001, 1), -1);
-        this.dz = Math.max(Math.min(this.dz + (other.z - this.z) * 0.001, 1), -1);
+        this.moveTowards(other);
       } else {
         // if (distance > 100) { // If too far
         //   this.dx -= (this.x - other.x) * 0.0001;

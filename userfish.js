@@ -1,6 +1,6 @@
 class UserFish extends Inhabitant {
   constructor(x, y, z, size) {
-    super(x, y, z, size); // Use the base class constructor
+    super(x, y, z, 0, 0, 0, size); // Use the base class constructor
   }
 
   update() {
@@ -12,11 +12,7 @@ class UserFish extends Inhabitant {
     if (keyIsDown(87)) this.z += 5; // 'w' key moves further back
     if (keyIsDown(82)) this.z -= 5; // 'r' key moves closer to the front
 
-    // Constrain position within the tank bounds
-    this.x = constrain(this.x, 150, 850); // Horizontal bounds
-    this.y = constrain(this.y, 150 + 0.1 * 500, 650); // Vertical bounds (90% of tank height)
-
-    this.z = constrain(this.z, 20, 400); // Depth bounds
+    super.update();
   }
 
   render(tank) {

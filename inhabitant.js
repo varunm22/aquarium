@@ -1,17 +1,26 @@
 class Inhabitant {
-  constructor(x, y, z, size) {
+  constructor(x, y, z, dx, dy, dz, size) {
     this.x = x; // Horizontal position
     this.y = y; // Vertical position
     this.z = z; // Depth position
+    this.dx = dx; // Horizontal speed
+    this.dy = dy; // Vertical speed
+    this.dz = dz; // Depth speed
     this.size = size; // Size of the inhabitant
   }
 
-  // Calculate the distance between two points
+  // Calculate the distance to another inhabitant
   distanceTo(other) {
     return dist(this.x, this.y, other.x, other.y);
   }
 
-  // Calculate the angle between the fish and another inhabitant
+  moveTowards(other, maxSpeed = 1) {
+    this.dx = Math.max(Math.min(this.dx + (other.x - this.x) * 0.001, maxSpeed), -1 * maxSpeed);
+    this.dy = Math.max(Math.min(this.dy + (other.y - this.y) * 0.001, maxSpeed), -1 * maxSpeed);
+    this.dz = Math.max(Math.min(this.dz + (other.z - this.z) * 0.001, maxSpeed), -1 * maxSpeed);
+  }
+
+  // Calculate if another inhabitant is in view based on angle and distance
   isInFieldOfView(other, maxAngle = 45, maxDistance = 200) {
     // Direction vector from the current fish to the other
     const dx = other.x - this.x;
@@ -44,8 +53,22 @@ class Inhabitant {
   }
 
   update() {
-    // Default update behavior (e.g., for autonomous inhabitants)
-    // This will be overridden in specific classes as needed
+    // Default update behavior
+
+    // Update position based on velocity
+    this.x += this.dx;
+    this.y += this.dy;
+    this.z += this.dz;
+
+    // Constrain position within the tank bounds
+    this.x = constrain(this.x, 150, 850); // Horizontal bounds
+    this.y = constrain(this.y, 150 + 0.1 * 500, 650); // Vertical bounds (90% of tank height)
+    this.z = constrain(this.z, 20, 400); // Depth bounds
+
+    // Speed decay
+    this.dx *= 0.95; // Slow down horizontal speed
+    this.dy *= 0.95; // Slow down horizontal speed
+    this.dz *= 0.95; // Slow down horizontal speed
   }
 
   render(tank, color) {
