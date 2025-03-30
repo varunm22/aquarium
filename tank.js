@@ -1,9 +1,10 @@
 class Tank {
-    constructor(x, y, width, height) {
+    constructor(x, y, width, height, depth) {
       this.x = x; // Front pane top-left X
       this.y = y; // Front pane top-left Y
       this.width = width; // Width of the front pane
       this.height = height; // Height of the front pane
+      this.depth = depth; // Depth of the tank
   
       // Back pane properties (scaled and centered)
       this.backX = this.x + (this.width - this.width * 0.7) / 2; // Centered back pane X
@@ -28,7 +29,7 @@ class Tank {
     update() {
       // Update all fish in the tank
       for (let fish of this.fish) {
-        fish.update();
+        fish.update(this.fish);
       }
     }
 
@@ -39,9 +40,9 @@ class Tank {
       // Render back pane (before any water layers)
       this.renderBack();
     
-      // Render fish behind the first water layer (z > 1, at the absolute back)
+      // Render fish behind the first water layer (z > this.depth, at the absolute back)
       for (let fish of this.fish) {
-        if (fish.z >= 1) {
+        if (fish.z >= this.depth) {
           fish.render(this);
         }
       }
@@ -51,8 +52,8 @@ class Tank {
         const interp = i / this.numLayers; // Interpolation factor
         const nextInterp = (i + 1) / this.numLayers; // Next layer's interpolation factor
     
-        const layerZStart = interp;
-        const layerZEnd = nextInterp;
+        const layerZStart = interp * this.depth;
+        const layerZEnd = nextInterp * this.depth;
     
         // Render fish that fall within this layer
         for (let fish of this.fish) {
