@@ -1,9 +1,7 @@
 class Fish extends Inhabitant {
     constructor(x, y, z, size) {
-      let dx = random(-1, 1); // Random horizontal movement speed
-      let dy = random(-1, 1); // Random vertical movement speed
-      let dz = random(-1, 1); // Random depth movement speed
-      super(x, y, z, dx, dy, dz, size); // Use the base class constructor
+      const position = new Vector(x, y, z);
+      super(position, Vector.random(-1, 1), size); // Use the base class constructor
     }
   
     update(inhabitants) {
@@ -30,9 +28,10 @@ class Fish extends Inhabitant {
         }
       }
       if (!can_see_user_fish) {
-        this.dx = random(-1, 1);
-        this.dy = random(-1, 1);
-        this.dz = random(-1, 1);
+        this.velocity = Vector.random(-1, 1);
+        // this.dx = random(-1, 1);
+        // this.dy = random(-1, 1);
+        // this.dz = random(-1, 1);
       }
     }
 

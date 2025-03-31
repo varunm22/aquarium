@@ -35,14 +35,14 @@ class Tank {
 
     render() {
       // Sort fish by depth (further fish first)
-      this.fish.sort((a, b) => b.z - a.z);
+      this.fish.sort((a, b) => b.position.z - a.position.z);
     
       // Render back pane (before any water layers)
       this.renderBack();
     
       // Render fish behind the first water layer (z > this.depth, at the absolute back)
       for (let fish of this.fish) {
-        if (fish.z >= this.depth) {
+        if (fish.position.z >= this.depth) {
           fish.render(this);
         }
       }
@@ -57,7 +57,7 @@ class Tank {
     
         // Render fish that fall within this layer
         for (let fish of this.fish) {
-          if (fish.z >= layerZStart && fish.z < layerZEnd) {
+          if (fish.position.z >= layerZStart && fish.position.z < layerZEnd) {
             fish.render(this);
           }
         }
@@ -76,7 +76,7 @@ class Tank {
     
       // Render fish in front of the last water layer (z < 0, at the absolute front)
       for (let fish of this.fish) {
-        if (fish.z < 0) {
+        if (fish.position.z < 0) {
           fish.render(this);
         }
       }

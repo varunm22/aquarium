@@ -1,48 +1,33 @@
 class Inhabitant {
-  constructor(x, y, z, dx, dy, dz, size) {
-    this.x = x; // Horizontal position
-    this.y = y; // Vertical position
-    this.z = z; // Depth position
-    this.dx = dx; // Horizontal speed
-    this.dy = dy; // Vertical speed
-    this.dz = dz; // Depth speed
-    this.size = size; // Size of the inhabitant
+  constructor(position, velocity, size) {
+    this.position = position;
+    this.velocity = velocity;
+    this.size = size;
   }
 
   // Calculate the distance to another inhabitant
   distanceTo(other) {
-    return dist(this.x, this.y, other.x, other.y);
+    return this.position.distanceTo(other.position);
   }
 
   moveTowards(other, maxSpeed = 1) {
-    this.dx = Math.max(Math.min(this.dx + (other.x - this.x) * 0.001, maxSpeed), -1 * maxSpeed);
-    this.dy = Math.max(Math.min(this.dy + (other.y - this.y) * 0.001, maxSpeed), -1 * maxSpeed);
-    this.dz = Math.max(Math.min(this.dz + (other.z - this.z) * 0.001, maxSpeed), -1 * maxSpeed);
+    this.velocity = other.position.subtract(this.position).multiply(0.001).add(this.velocity).constrainScalar(-maxSpeed, maxSpeed);
   }
 
   // Calculate if another inhabitant is in view based on angle and distance
   isInFieldOfView(other, maxAngle = 45, maxDistance = 200) {
     // Direction vector from the current fish to the other
-    const dx = other.x - this.x;
-    const dy = other.y - this.y;
-    const dz = other.z - this.z;
+    const disp = other.position.subtract(this.position);
 
     // Calculate the 3D distance
     const distance = this.distanceTo(other);
 
     // Normalize the direction vector
-    const directionMagnitude = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    const dxNormalized = dx / directionMagnitude;
-    const dyNormalized = dy / directionMagnitude;
-    const dzNormalized = dz / directionMagnitude;
-
-    // Assume the fish faces along the positive z-axis (depth)
-    const fishFacingZ = 0; // Facing straight along z-axis
-    const fishFacingY = 0;
-    const fishFacingX = 1;
+    const disp_norm = disp.divide(disp.magnitude());
 
     // Dot product between the fish's facing direction and the direction to the other fish
-    const dotProduct = dxNormalized * fishFacingX + dyNormalized * fishFacingY + dzNormalized * fishFacingZ;
+    const fish_dir = this.velocity.divide(this.velocity.magnitude());
+    const dotProduct = disp_norm.dotProduct(fish_dir)
 
     // Angle between the vectors
     const angle = Math.acos(dotProduct); // Angle between the vectors in radians
@@ -53,29 +38,21 @@ class Inhabitant {
   }
 
   update() {
-    // Default update behavior
-
     // Update position based on velocity
-    this.x += this.dx;
-    this.y += this.dy;
-    this.z += this.dz;
+    this.position = this.position.add(this.velocity);
 
     // Constrain position within the tank bounds
-    this.x = constrain(this.x, 150, 850); // Horizontal bounds
-    this.y = constrain(this.y, 150 + 0.1 * 500, 650); // Vertical bounds (90% of tank height)
-    this.z = constrain(this.z, 20, 400); // Depth bounds
+    this.position = this.position.constrainVector(new Vector(150, 150, 20), new Vector(850, 650, 400));
 
     // Speed decay
-    this.dx *= 0.95; // Slow down horizontal speed
-    this.dy *= 0.95; // Slow down horizontal speed
-    this.dz *= 0.95; // Slow down horizontal speed
+    this.velocity = this.velocity.multiply(0.95);
   }
 
   render(tank, color) {
     // Interpolate 2D position based on depth
-    const relativeDepth = this.z / tank.depth;
-    const renderX = lerp(tank.x, tank.backX, relativeDepth) + (this.x - tank.x) * lerp(1, 0.7, relativeDepth);
-    const renderY = lerp(tank.y, tank.backY, relativeDepth) + (this.y - tank.y) * lerp(1, 0.7, relativeDepth);
+    const relativeDepth = this.position.z / tank.depth;
+    const renderX = lerp(tank.x, tank.backX, relativeDepth) + (this.position.x - tank.x) * lerp(1, 0.7, relativeDepth);
+    const renderY = lerp(tank.y, tank.backY, relativeDepth) + (this.position.y - tank.y) * lerp(1, 0.7, relativeDepth);
 
     // Scale size based on depth
     const renderSize = this.size * lerp(1, 0.7, relativeDepth);
