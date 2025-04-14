@@ -1,3 +1,42 @@
+class Position {
+  constructor(value, delta) {
+    this.value = value;
+    this.delta = delta;
+    this.ddelta = Vector.zero();
+  }
+
+  get x() {
+    return this.value.x;
+  }
+
+  set x(newX) {
+    this.value.x = newX;
+  }
+  get y() {
+    return this.value.y;
+  }
+  set y(newY) {
+    this.value.y = newY;
+  }
+  get z() {
+    return this.value.z;
+  }
+  set z(newZ) {
+    this.value.z = newZ;
+  }
+
+  update() {
+    this.value = this.value.add(this.delta);
+    this.delta = this.delta.add(this.ddelta);
+    // Constrain position to the tank bounds
+    this.value = this.value.constrainVector(new Vector(150, 150, 20), new Vector(850, 650, 400));
+    // Speed decay
+    this.delta = this.delta.multiply(0.95);
+
+
+  }
+}
+
 class Inhabitant {
   constructor(position, velocity, size) {
     this.position = position;
@@ -10,8 +49,13 @@ class Inhabitant {
     return this.position.distanceTo(other.position);
   }
 
-  moveTowards(other, maxSpeed = 1) {
-    this.velocity = other.position.subtract(this.position).multiply(0.001).add(this.velocity).constrainScalar(-maxSpeed, maxSpeed);
+  moveTowards(other, maxSpeed = 1, multiplier = 1) {
+    this.velocity = this.velocity.add(other.position.subtract(this.position).multiply(multiplier * 0.0001)).constrainScalar(-maxSpeed, maxSpeed);
+  }
+
+  moveFrom(other, maxSpeed = 1, multiplier = 1) {
+    let diff_vector = other.position.subtract(this.position);
+    this.velocity = this.velocity.subtract(diff_vector.multiply(multiplier).divide(diff_vector.magnitude()**2 * 10)).constrainScalar(-maxSpeed, maxSpeed);
   }
 
   // Calculate if another inhabitant is in view based on angle and distance
@@ -46,6 +90,7 @@ class Inhabitant {
 
     // Speed decay
     this.velocity = this.velocity.multiply(0.95);
+    // this.position.update()
   }
 
   render(tank, color) {

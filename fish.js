@@ -8,7 +8,7 @@ class Fish extends Inhabitant {
       // React to other fish within the field of view
       const fish_in_view = [];
       for (let other of inhabitants) {
-        if (other !== this && this.isInFieldOfView(other, 90, 400)) {
+        if (other !== this && this.isInFieldOfView(other, 45, 200)) {
           fish_in_view.push(other);
         }
       }
@@ -25,13 +25,12 @@ class Fish extends Inhabitant {
         if (other instanceof UserFish) {
           can_see_user_fish = true;
           this.reactToFish(other);
+        } else {
+          this.reactToFish(other);
         }
       }
       if (!can_see_user_fish) {
         this.velocity = Vector.random(-1, 1);
-        // this.dx = random(-1, 1);
-        // this.dy = random(-1, 1);
-        // this.dz = random(-1, 1);
       }
     }
 
@@ -42,15 +41,13 @@ class Fish extends Inhabitant {
       if (other instanceof UserFish) {
         this.moveTowards(other);
       } else {
-        // if (distance > 100) { // If too far
-        //   this.dx -= (this.x - other.x) * 0.0001;
-        //   this.dy -= (this.y - other.y) * 0.0001;
-        //   this.dz -= (this.z - other.z) * 0.0001;
-        // } else if (distance < 20) { // If too close
-        //   this.dx += (this.x - other.x) * 0.01;
-        //   this.dy += (this.y - other.y) * 0.01;
-        //   this.dz += (this.z - other.z) * 0.01;
-        // }
+        if (distance > 100) { // If too far
+          this.moveTowards(other, 1, 1);
+        } else if (distance < 50) { // If too close
+          // TODO: this is not working, maybe need to only look at our type fish?
+          // actually should include fish that are not in sight but in proximity
+          this.moveFrom(other, 2, 1);
+        }
       }
     }
   
