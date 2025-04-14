@@ -1,4 +1,4 @@
-class Tank {
+export class Tank {
     constructor(x, y, width, height, depth) {
       this.x = x; // Front pane top-left X
       this.y = y; // Front pane top-left Y

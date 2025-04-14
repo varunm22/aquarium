@@ -1,3 +1,7 @@
+import { Tank } from './tank.js';
+import { Fish } from './fish.js';
+import { UserFish } from './userfish.js';
+
 let tank;
 
 function setup() {
@@ -17,7 +21,7 @@ function setup() {
   }
 
   // Add the user-controlled fish
-  userFish = new UserFish(500, 400, 200, 30); // Start in the middle of the tank
+  let userFish = new UserFish(500, 400, 200, 30); // Start in the middle of the tank
   tank.addFish(userFish); // Add to the tank inhabitants
 }
 
@@ -28,3 +32,6 @@ function draw() {
   tank.update();
   tank.render();
 }
+
+window.setup = setup;
+window.draw = draw;

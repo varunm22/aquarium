@@ -1,3 +1,5 @@
+import { Vector } from './vector.js';
+
 class Position {
   constructor(value, delta) {
     this.value = value;
@@ -37,7 +39,7 @@ class Position {
   }
 }
 
-class Inhabitant {
+export class Inhabitant {
   constructor(position, velocity, size) {
     this.position = position;
     this.velocity = velocity;

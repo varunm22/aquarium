@@ -1,4 +1,8 @@
-class Fish extends Inhabitant {
+import { Inhabitant } from './inhabitant.js';
+import { Vector } from './vector.js';
+import { UserFish } from './userfish.js';
+
+export class Fish extends Inhabitant {
     constructor(x, y, z, size) {
       const position = new Vector(x, y, z);
       super(position, Vector.random(-1, 1), size); // Use the base class constructor
