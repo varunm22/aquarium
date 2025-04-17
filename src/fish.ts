@@ -1,16 +1,25 @@
 import { Inhabitant } from './inhabitant.js';
 import { Vector } from './vector.js';
 import { UserFish } from './userfish.js';
+import { Tank } from './tank.js';
+
+// Declare p5.js global functions
+declare function color(r: number, g: number, b: number): p5.Color;
+
+// Declare p5.Color type
+declare namespace p5 {
+  interface Color {}
+}
 
 export class Fish extends Inhabitant {
-    constructor(x, y, z, size) {
+    constructor(x: number, y: number, z: number, size: number) {
       const position = new Vector(x, y, z);
       super(position, Vector.random(-1, 1), size); // Use the base class constructor
     }
   
-    update(inhabitants) {
+    update(inhabitants: Inhabitant[]): void {
       // React to other fish within the field of view
-      const fish_in_view = [];
+      const fish_in_view: Inhabitant[] = [];
       for (let other of inhabitants) {
         if (other !== this && this.isInFieldOfView(other, 45, 200)) {
           fish_in_view.push(other);
@@ -23,7 +32,7 @@ export class Fish extends Inhabitant {
     }
 
 
-    reactToAllFish(fish_in_view) {
+    reactToAllFish(fish_in_view: Inhabitant[]): void {
       let can_see_user_fish = false;
       for (let other of fish_in_view) {
         if (other instanceof UserFish) {
@@ -38,7 +47,7 @@ export class Fish extends Inhabitant {
       }
     }
 
-    reactToFish(other) {
+    reactToFish(other: Inhabitant): void {
       // NOTE: only using this for user fish so far, should make a general distance one?
       // Basic behavior: move towards other fish if too far
       const distance = this.distanceTo(other);
@@ -55,7 +64,7 @@ export class Fish extends Inhabitant {
       }
     }
   
-    render(tank) {
+    render(tank: Tank): void {
       super.render(tank, color(255, 200, 0)); // Render as yellow
     }
   }

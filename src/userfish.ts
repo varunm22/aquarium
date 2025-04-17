@@ -1,12 +1,23 @@
 import { Inhabitant } from './inhabitant.js';
 import { Vector } from './vector.js';
+import { Tank } from './tank.js';
+
+// Declare p5.js global functions
+declare function color(r: number, g: number, b: number): p5.Color;
+declare function keyIsDown(keyCode: number): boolean;
+
+// Declare p5.Color type
+declare namespace p5 {
+  interface Color {}
+}
+
 export class UserFish extends Inhabitant {
-  constructor(x, y, z, size) {
+  constructor(x: number, y: number, z: number, size: number) {
     const position = new Vector(x, y, z);
     super(position, Vector.zero(), size); // Use the base class constructor
   }
 
-  update() {
+  update(): void {
     // Update position based on key presses
     if (keyIsDown(83)) this.position.x -= 5; // 's' key moves left
     if (keyIsDown(70)) this.position.x += 5; // 'f' key moves right
@@ -18,7 +29,7 @@ export class UserFish extends Inhabitant {
     super.update();
   }
 
-  render(tank) {
-    super.render(tank, color(0)); // Render as black
+  render(tank: Tank): void {
+    super.render(tank, color(0, 0, 0)); // Render as black
   }
 }

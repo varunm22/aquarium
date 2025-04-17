@@ -2,9 +2,14 @@ import { Tank } from './tank.js';
 import { Fish } from './fish.js';
 import { UserFish } from './userfish.js';
 
-let tank;
+// Declare p5.js global functions
+declare function createCanvas(w: number, h: number): void;
+declare function background(color: number): void;
+declare function random(min: number, max: number): number;
 
-function setup() {
+let tank: Tank;
+
+function setup(): void {
   createCanvas(1000, 800);
   
   // Initialize the tank
@@ -25,12 +30,20 @@ function setup() {
   tank.addFish(userFish); // Add to the tank inhabitants
 }
 
-function draw() {
+function draw(): void {
   background(255);
 
   // Update and render the tank
   tank.update();
   tank.render();
+}
+
+// Make setup and draw available to p5.js
+declare global {
+  interface Window {
+    setup: typeof setup;
+    draw: typeof draw;
+  }
 }
 
 window.setup = setup;
