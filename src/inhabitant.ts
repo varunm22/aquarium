@@ -1,5 +1,5 @@
-import { Vector } from './vector.js';
 import { Tank } from './tank.js';
+import { Position } from './factors/position.js';
 
 // Declare p5.js global functions
 declare function degrees(radians: number): number;
@@ -13,78 +13,35 @@ declare namespace p5 {
   interface Color {}
 }
 
-class Position {
-  value: Vector;
-  delta: Vector;
-  ddelta: Vector;
-
-  constructor(value: Vector, delta: Vector) {
-    this.value = value;
-    this.delta = delta;
-    this.ddelta = Vector.zero();
-  }
-
-  get x(): number {
-    return this.value.x;
-  }
-
-  set x(newX: number) {
-    this.value.x = newX;
-  }
-
-  get y(): number {
-    return this.value.y;
-  }
-
-  set y(newY: number) {
-    this.value.y = newY;
-  }
-
-  get z(): number {
-    return this.value.z;
-  }
-
-  set z(newZ: number) {
-    this.value.z = newZ;
-  }
-
-  update(): void {
-    this.value = this.value.add(this.delta);
-    this.delta = this.delta.add(this.ddelta);
-    // Constrain position to the tank bounds
-    this.value = this.value.constrainVector(new Vector(150, 150, 20), new Vector(850, 650, 400));
-    // Speed decay
-    this.delta = this.delta.multiply(0.95);
-  }
-}
-
 export class Inhabitant {
-  position: Vector;
-  velocity: Vector;
+  position: Position;
   size: number;
 
-  constructor(position: Vector, velocity: Vector, size: number) {
+  constructor(position: Position, size: number) {
     this.position = position;
-    this.velocity = velocity;
     this.size = size;
   }
 
   distanceTo(other: Inhabitant): number {
-    return this.position.distanceTo(other.position);
+    return this.position.value.distanceTo(other.position.value);
   }
 
   moveTowards(other: Inhabitant, maxSpeed: number = 1, multiplier: number = 1): void {
-    this.velocity = this.velocity.add(other.position.subtract(this.position).multiply(multiplier * 0.0001)).constrainScalar(-maxSpeed, maxSpeed);
+    this.position.delta = this.position.delta.add(
+      other.position.value.subtract(this.position.value).multiply(multiplier * 0.0001)
+    ).constrainScalar(-maxSpeed, maxSpeed);
   }
 
   moveFrom(other: Inhabitant, maxSpeed: number = 1, multiplier: number = 1): void {
-    let diff_vector = other.position.subtract(this.position);
-    this.velocity = this.velocity.subtract(diff_vector.multiply(multiplier).divide(diff_vector.magnitude()**2 * 10)).constrainScalar(-maxSpeed, maxSpeed);
+    let diff_vector = other.position.value.subtract(this.position.value);
+    this.position.delta = this.position.delta.subtract(
+      diff_vector.multiply(multiplier).divide(diff_vector.magnitude()**2 * 10)
+    ).constrainScalar(-maxSpeed, maxSpeed);
   }
 
   isInFieldOfView(other: Inhabitant, maxAngle: number = 45, maxDistance: number = 200): boolean {
     // Direction vector from the current fish to the other
-    const disp = other.position.subtract(this.position);
+    const disp = other.position.value.subtract(this.position.value);
 
     // Calculate the 3D distance
     const distance = this.distanceTo(other);
@@ -93,7 +50,7 @@ export class Inhabitant {
     const disp_norm = disp.divide(disp.magnitude());
 
     // Dot product between the fish's facing direction and the direction to the other fish
-    const fish_dir = this.velocity.divide(this.velocity.magnitude());
+    const fish_dir = this.position.delta.divide(this.position.delta.magnitude());
     const dotProduct = disp_norm.dotProduct(fish_dir)
 
     // Angle between the vectors
@@ -106,13 +63,7 @@ export class Inhabitant {
 
   update(inhabitants: Inhabitant[] = []): void {
     // Update position based on velocity
-    this.position = this.position.add(this.velocity);
-
-    // Constrain position within the tank bounds
-    this.position = this.position.constrainVector(new Vector(150, 150, 20), new Vector(850, 650, 400));
-
-    // Speed decay
-    this.velocity = this.velocity.multiply(0.95);
+    this.position.update();
   }
 
   render(tank: Tank, color: p5.Color): void {

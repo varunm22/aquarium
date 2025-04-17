@@ -1,9 +1,10 @@
 import { Inhabitant } from './inhabitant.js';
 import { Vector } from './vector.js';
+import { Position } from './factors/position.js';
 export class UserFish extends Inhabitant {
     constructor(x, y, z, size) {
-        const position = new Vector(x, y, z);
-        super(position, Vector.zero(), size); // Use the base class constructor
+        const position = new Position(new Vector(x, y, z), Vector.zero());
+        super(position, size);
     }
     update() {
         // Update position based on key presses

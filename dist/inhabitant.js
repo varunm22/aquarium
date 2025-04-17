@@ -1,62 +1,27 @@
-import { Vector } from './vector.js';
-class Position {
-    constructor(value, delta) {
-        this.value = value;
-        this.delta = delta;
-        this.ddelta = Vector.zero();
-    }
-    get x() {
-        return this.value.x;
-    }
-    set x(newX) {
-        this.value.x = newX;
-    }
-    get y() {
-        return this.value.y;
-    }
-    set y(newY) {
-        this.value.y = newY;
-    }
-    get z() {
-        return this.value.z;
-    }
-    set z(newZ) {
-        this.value.z = newZ;
-    }
-    update() {
-        this.value = this.value.add(this.delta);
-        this.delta = this.delta.add(this.ddelta);
-        // Constrain position to the tank bounds
-        this.value = this.value.constrainVector(new Vector(150, 150, 20), new Vector(850, 650, 400));
-        // Speed decay
-        this.delta = this.delta.multiply(0.95);
-    }
-}
 export class Inhabitant {
-    constructor(position, velocity, size) {
+    constructor(position, size) {
         this.position = position;
-        this.velocity = velocity;
         this.size = size;
     }
     distanceTo(other) {
-        return this.position.distanceTo(other.position);
+        return this.position.value.distanceTo(other.position.value);
     }
     moveTowards(other, maxSpeed = 1, multiplier = 1) {
-        this.velocity = this.velocity.add(other.position.subtract(this.position).multiply(multiplier * 0.0001)).constrainScalar(-maxSpeed, maxSpeed);
+        this.position.delta = this.position.delta.add(other.position.value.subtract(this.position.value).multiply(multiplier * 0.0001)).constrainScalar(-maxSpeed, maxSpeed);
     }
     moveFrom(other, maxSpeed = 1, multiplier = 1) {
-        let diff_vector = other.position.subtract(this.position);
-        this.velocity = this.velocity.subtract(diff_vector.multiply(multiplier).divide(Math.pow(diff_vector.magnitude(), 2) * 10)).constrainScalar(-maxSpeed, maxSpeed);
+        let diff_vector = other.position.value.subtract(this.position.value);
+        this.position.delta = this.position.delta.subtract(diff_vector.multiply(multiplier).divide(Math.pow(diff_vector.magnitude(), 2) * 10)).constrainScalar(-maxSpeed, maxSpeed);
     }
     isInFieldOfView(other, maxAngle = 45, maxDistance = 200) {
         // Direction vector from the current fish to the other
-        const disp = other.position.subtract(this.position);
+        const disp = other.position.value.subtract(this.position.value);
         // Calculate the 3D distance
         const distance = this.distanceTo(other);
         // Normalize the direction vector
         const disp_norm = disp.divide(disp.magnitude());
         // Dot product between the fish's facing direction and the direction to the other fish
-        const fish_dir = this.velocity.divide(this.velocity.magnitude());
+        const fish_dir = this.position.delta.divide(this.position.delta.magnitude());
         const dotProduct = disp_norm.dotProduct(fish_dir);
         // Angle between the vectors
         const angle = Math.acos(dotProduct); // Angle between the vectors in radians
@@ -66,11 +31,7 @@ export class Inhabitant {
     }
     update(inhabitants = []) {
         // Update position based on velocity
-        this.position = this.position.add(this.velocity);
-        // Constrain position within the tank bounds
-        this.position = this.position.constrainVector(new Vector(150, 150, 20), new Vector(850, 650, 400));
-        // Speed decay
-        this.velocity = this.velocity.multiply(0.95);
+        this.position.update();
     }
     render(tank, color) {
         // Interpolate 2D position based on depth

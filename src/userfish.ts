@@ -1,6 +1,7 @@
 import { Inhabitant } from './inhabitant.js';
 import { Vector } from './vector.js';
 import { Tank } from './tank.js';
+import { Position } from './factors/position.js';
 
 // Declare p5.js global functions
 declare function color(r: number, g: number, b: number): p5.Color;
@@ -13,8 +14,8 @@ declare namespace p5 {
 
 export class UserFish extends Inhabitant {
   constructor(x: number, y: number, z: number, size: number) {
-    const position = new Vector(x, y, z);
-    super(position, Vector.zero(), size); // Use the base class constructor
+    const position = new Position(new Vector(x, y, z), Vector.zero());
+    super(position, size);
   }
 
   update(): void {
