@@ -10,12 +10,18 @@ export class Fish extends Inhabitant {
     update(inhabitants) {
         // React to other fish within the field of view
         const fish_in_view = [];
+        const fish_in_proximity = [];
         for (let other of inhabitants) {
-            if (other !== this && this.isInFieldOfView(other, 45, 200)) {
-                fish_in_view.push(other);
+            if (other !== this) {
+                if (this.isInFieldOfView(other, 45, 200)) {
+                    fish_in_view.push(other);
+                }
+                else if (this.distanceTo(other) <= 50) { // Check proximity if not in view
+                    fish_in_proximity.push(other);
+                }
             }
         }
-        this.reactToAllFish(fish_in_view);
+        this.reactToAllFish(fish_in_view, fish_in_proximity);
         super.update(inhabitants);
     }
     calculateAttractionForce(other, maxSpeed, multiplier) {
@@ -38,11 +44,12 @@ export class Fish extends Inhabitant {
         }
         return direction;
     }
-    reactToAllFish(fish_in_view) {
+    reactToAllFish(fish_in_view, fish_in_proximity) {
         // Reset ddelta to ensure clean force application
         this.position.ddelta = Vector.zero();
         let totalForce = Vector.zero();
         let can_see_user_fish = false;
+        // Handle fish in visual range
         for (let other of fish_in_view) {
             if (other instanceof UserFish) {
                 can_see_user_fish = true;
@@ -51,14 +58,21 @@ export class Fish extends Inhabitant {
             }
             else {
                 const distance = this.distanceTo(other);
-                if (distance > 100) {
+                if (distance > 150) {
                     // Weak attraction to other fish when far
                     totalForce.addInPlace(this.calculateAttractionForce(other, 0.1, 0.001));
                 }
-                else if (distance < 50) {
+                else if (distance < 100) {
                     // Strong repulsion from other fish when close
                     totalForce.addInPlace(this.calculateRepulsionForce(other, 0.1, 0.1));
                 }
+            }
+        }
+        // Handle fish in proximity but not in view
+        for (let other of fish_in_proximity) {
+            if (other instanceof Fish) { // Only react to regular Fish
+                // Strong repulsion from fish detected by proximity
+                totalForce.addInPlace(this.calculateRepulsionForce(other, 0.5, 1));
             }
         }
         if (!can_see_user_fish) {
