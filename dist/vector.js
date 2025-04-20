@@ -15,6 +15,13 @@ export class Vector {
     multiply(scalar) {
         return new Vector(this.x * scalar, this.y * scalar, this.z * scalar);
     }
+    // In-place scalar multiplication
+    multiplyInPlace(scalar) {
+        this.x *= scalar;
+        this.y *= scalar;
+        this.z *= scalar;
+        return this;
+    }
     // Scalar division
     divide(scalar) {
         if (scalar === 0) {
@@ -22,13 +29,37 @@ export class Vector {
         }
         return new Vector(this.x / scalar, this.y / scalar, this.z / scalar);
     }
+    // In-place scalar division
+    divideInPlace(scalar) {
+        if (scalar === 0) {
+            throw new Error("Division by zero is not allowed.");
+        }
+        this.x /= scalar;
+        this.y /= scalar;
+        this.z /= scalar;
+        return this;
+    }
     // Element-wise addition
     add(other) {
         return new Vector(this.x + other.x, this.y + other.y, this.z + other.z);
     }
+    // In-place element-wise addition
+    addInPlace(other) {
+        this.x += other.x;
+        this.y += other.y;
+        this.z += other.z;
+        return this;
+    }
     // Element-wise subtraction
     subtract(other) {
         return new Vector(this.x - other.x, this.y - other.y, this.z - other.z);
+    }
+    // In-place element-wise subtraction
+    subtractInPlace(other) {
+        this.x -= other.x;
+        this.y -= other.y;
+        this.z -= other.z;
+        return this;
     }
     dotProduct(other) {
         return this.x * other.x + this.y * other.y + this.z * other.z;

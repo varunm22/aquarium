@@ -19,8 +19,8 @@ export class Factor<T extends Vector | number> {
             this.value = (v + d) as T;
             this.delta = (d + dd) as T;
         } else {
-            this.value = (this.value as Vector).add(this.delta as Vector) as T;
-            this.delta = (this.delta as Vector).add(this.ddelta as Vector) as T;
+            (this.value as Vector).addInPlace(this.delta as Vector);
+            (this.delta as Vector).addInPlace(this.ddelta as Vector);
         }
     }
 } 

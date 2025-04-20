@@ -14,8 +14,8 @@ export class Factor {
             this.delta = (d + dd);
         }
         else {
-            this.value = this.value.add(this.delta);
-            this.delta = this.delta.add(this.ddelta);
+            this.value.addInPlace(this.delta);
+            this.delta.addInPlace(this.ddelta);
         }
     }
 }

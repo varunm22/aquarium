@@ -3,6 +3,8 @@ import { Vector } from '../vector.js';
 export class Position extends Factor {
     constructor(value, delta) {
         super(value, delta);
+        this.accelerationDuration = 0;
+        this.originalDdelta = Vector.zero();
     }
     get x() {
         return this.value.x;
@@ -22,11 +24,37 @@ export class Position extends Factor {
     set z(newZ) {
         this.value.z = newZ;
     }
+    applyAcceleration(acceleration, duration) {
+        this.originalDdelta = this.ddelta;
+        this.ddelta = acceleration;
+        this.accelerationDuration = duration;
+    }
     update() {
         super.update();
         // Constrain position to tank bounds
-        this.value = this.value.constrainVector(new Vector(150, 200, 20), new Vector(850, 650, 400));
+        const constrained = this.value.constrainVector(new Vector(150, 200, 20), new Vector(850, 650, 400));
+        // Check if we're at any boundaries and bounce accordingly
+        if (constrained.x !== this.value.x) {
+            this.delta.x *= -1;
+            this.ddelta.x *= -1; // Also reflect the acceleration
+        }
+        if (constrained.y !== this.value.y) {
+            this.delta.y *= -1;
+            this.ddelta.y *= -1; // Also reflect the acceleration
+        }
+        if (constrained.z !== this.value.z) {
+            this.delta.z *= -1;
+            this.ddelta.z *= -1; // Also reflect the acceleration
+        }
+        this.value = constrained;
+        // Handle temporary acceleration duration
+        if (this.accelerationDuration > 0) {
+            this.accelerationDuration--;
+            if (this.accelerationDuration === 0) {
+                this.ddelta = this.originalDdelta;
+            }
+        }
         // Apply speed decay
-        this.delta = this.delta.multiply(0.95);
+        this.delta.multiplyInPlace(0.95);
     }
 }

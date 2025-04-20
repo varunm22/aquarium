@@ -16,7 +16,7 @@ function setup(): void {
   tank = new Tank(150, 150, 700, 500, 400);
 
   // Add fish to the tank with random 3D positions and sizes
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 10; i++) {
     const x = random(150, 850); // Random x within the front pane bounds
     const y = random(150, 650); // Random y within the front pane bounds
     const z = random(0, 400); // Random depth (0 = front, 1 = back)

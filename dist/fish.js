@@ -18,37 +18,55 @@ export class Fish extends Inhabitant {
         this.reactToAllFish(fish_in_view);
         super.update(inhabitants);
     }
+    calculateAttractionForce(other, maxSpeed, multiplier) {
+        const direction = other.position.value.subtract(this.position.value);
+        const distance = direction.magnitude();
+        direction.divideInPlace(distance);
+        direction.multiplyInPlace(distance * multiplier);
+        if (direction.magnitude() > maxSpeed) {
+            direction.multiplyInPlace(maxSpeed / direction.magnitude());
+        }
+        return direction;
+    }
+    calculateRepulsionForce(other, maxSpeed, multiplier) {
+        const direction = other.position.value.subtract(this.position.value);
+        const distance = direction.magnitude();
+        direction.divideInPlace(distance);
+        direction.multiplyInPlace(-multiplier / (distance * distance));
+        if (direction.magnitude() > maxSpeed) {
+            direction.multiplyInPlace(maxSpeed / direction.magnitude());
+        }
+        return direction;
+    }
     reactToAllFish(fish_in_view) {
+        // Reset ddelta to ensure clean force application
+        this.position.ddelta = Vector.zero();
+        let totalForce = Vector.zero();
         let can_see_user_fish = false;
         for (let other of fish_in_view) {
             if (other instanceof UserFish) {
                 can_see_user_fish = true;
-                this.reactToFish(other);
+                // Strong attraction to user fish
+                totalForce.addInPlace(this.calculateAttractionForce(other, 0.1, 0.001));
             }
             else {
-                this.reactToFish(other);
+                const distance = this.distanceTo(other);
+                if (distance > 100) {
+                    // Weak attraction to other fish when far
+                    totalForce.addInPlace(this.calculateAttractionForce(other, 0.1, 0.001));
+                }
+                else if (distance < 50) {
+                    // Strong repulsion from other fish when close
+                    totalForce.addInPlace(this.calculateRepulsionForce(other, 0.1, 0.1));
+                }
             }
         }
         if (!can_see_user_fish) {
-            this.position.delta = Vector.random(-1, 1);
+            // Add some random movement when no user fish in view
+            totalForce.addInPlace(Vector.random(-0.1, 0.1));
         }
-    }
-    reactToFish(other) {
-        // Basic behavior: move towards other fish if too far
-        const distance = this.distanceTo(other);
-        if (other instanceof UserFish) {
-            this.moveTowards(other);
-        }
-        else {
-            if (distance > 100) { // If too far
-                this.moveTowards(other, 1, 1);
-            }
-            else if (distance < 50) { // If too close
-                // TODO: this is not working, maybe need to only look at our type fish?
-                // actually should include fish that are not in sight but in proximity
-                this.moveFrom(other, 2, 1);
-            }
-        }
+        // Apply the combined force
+        this.position.applyAcceleration(totalForce, 1);
     }
     render(tank) {
         super.render(tank, color(255, 200, 0)); // Render as yellow

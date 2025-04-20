@@ -27,16 +27,29 @@ export class Inhabitant {
   }
 
   moveTowards(other: Inhabitant, maxSpeed: number = 1, multiplier: number = 1): void {
-    this.position.delta = this.position.delta.add(
-      other.position.value.subtract(this.position.value).multiply(multiplier * 0.0001)
-    ).constrainScalar(-maxSpeed, maxSpeed);
+    const direction = other.position.value.subtract(this.position.value);
+    const distance = direction.magnitude();
+    // Normalize direction first, then scale with distance
+    direction.divideInPlace(distance);
+    direction.multiplyInPlace(distance * multiplier);
+    // Cap the force magnitude
+    if (direction.magnitude() > maxSpeed) {
+      direction.multiplyInPlace(maxSpeed / direction.magnitude());
+    }
+    this.position.applyAcceleration(direction, 1);
   }
 
   moveFrom(other: Inhabitant, maxSpeed: number = 1, multiplier: number = 1): void {
-    let diff_vector = other.position.value.subtract(this.position.value);
-    this.position.delta = this.position.delta.subtract(
-      diff_vector.multiply(multiplier).divide(diff_vector.magnitude()**2 * 10)
-    ).constrainScalar(-maxSpeed, maxSpeed);
+    const direction = other.position.value.subtract(this.position.value);
+    const distance = direction.magnitude();
+    // Normalize direction first, then apply inverse square law
+    direction.divideInPlace(distance);
+    direction.multiplyInPlace(-multiplier / (distance * distance));
+    // Cap the force magnitude
+    if (direction.magnitude() > maxSpeed) {
+      direction.multiplyInPlace(maxSpeed / direction.magnitude());
+    }
+    this.position.applyAcceleration(direction, 1);
   }
 
   isInFieldOfView(other: Inhabitant, maxAngle: number = 45, maxDistance: number = 200): boolean {
