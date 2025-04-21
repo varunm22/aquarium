@@ -11,6 +11,11 @@ declare function stroke(color: number): void;
 declare function strokeWeight(weight: number): void;
 declare function line(x1: number, y1: number, x2: number, y2: number): void;
 declare function rect(x: number, y: number, w: number, h: number): void;
+declare function image(img: HTMLImageElement, x: number, y: number, w: number, h: number): void;
+declare function push(): void;
+declare function pop(): void;
+declare function loadImage(path: string): HTMLImageElement;
+
 
 // Declare p5.Color type
 declare namespace p5 {
@@ -38,6 +43,9 @@ export class Tank {
 
     numLayers: number; // Number of water tint layers
     fish: Inhabitant[]; // Array to store fish objects
+    gravelBottom: HTMLImageElement | null; // Reference to the gravel texture image for bottom
+    gravelFront: HTMLImageElement | null; // Reference to the gravel texture image for front
+    gravelHeight: number;
 
     constructor(x: number, y: number, width: number, height: number, depth: number) {
       this.x = x;
@@ -60,6 +68,9 @@ export class Tank {
   
       this.numLayers = 20;
       this.fish = [];
+      this.gravelBottom = loadImage('assets/gravel-transform.png');
+      this.gravelFront = loadImage('assets/gravel-front.png');
+      this.gravelHeight = 20;
     }
   
     addFish(fish: Inhabitant): void {
@@ -79,6 +90,9 @@ export class Tank {
     
       // Render back pane (before any water layers)
       this.renderBack();
+
+      // Render gravel
+      this.renderGravel();
     
       // Render fish behind the first water layer (z > this.depth, at the absolute back)
       for (let fish of this.fish) {
@@ -166,6 +180,43 @@ export class Tank {
       // FRONT: Render front water level line
       strokeWeight(2);
       line(this.x, this.waterLevelTop, this.x + this.width, this.waterLevelTop);
+    }
+
+    private renderGravel(): void {
+      // Skip if texture isn't loaded yet
+      if (!this.gravelBottom || !this.gravelFront) return;
+
+      push();
+      
+      // Calculate scaling factor based on tank width
+      const scale = this.width / 896;  // scale to fit tank width
+      const scaledWidth = 896 * scale;
+      const scaledHeight = 512 * scale;
+      
+      // Position the image:
+      // x: align with tank left edge
+      // y: align bottom of image with bottom of tank
+      image(
+        this.gravelBottom,
+        this.x,                           // left align with tank
+        this.waterLevelBottom - scaledHeight - this.gravelHeight,  // bottom align with tank
+        scaledWidth,
+        scaledHeight
+      );
+      image(
+        this.gravelFront,
+        this.x,
+        this.waterLevelBottom - this.gravelHeight,
+        scaledWidth,
+        this.gravelHeight,
+        // @ts-ignore
+        0,
+        0,
+        896,
+        this.gravelHeight/scale,
+      );
+      
+      pop();
     }
 }
   

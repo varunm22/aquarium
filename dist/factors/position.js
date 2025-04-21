@@ -32,7 +32,7 @@ export class Position extends Factor {
     update() {
         super.update();
         // Constrain position to tank bounds
-        const constrained = this.value.constrainVector(new Vector(150, 200, 20), new Vector(850, 650, 400));
+        const constrained = this.value.constrainVector(new Vector(150, 200, 20), new Vector(850, 630, 400));
         // Check if we're at any boundaries and bounce accordingly
         if (constrained.x !== this.value.x) {
             this.delta.x *= -1;

@@ -17,6 +17,9 @@ export class Tank {
         this.waterLevelBottomBack = this.backY + this.backHeight;
         this.numLayers = 20;
         this.fish = [];
+        this.gravelBottom = loadImage('assets/gravel-transform.png');
+        this.gravelFront = loadImage('assets/gravel-front.png');
+        this.gravelHeight = 20;
     }
     addFish(fish) {
         this.fish.push(fish);
@@ -32,6 +35,8 @@ export class Tank {
         this.fish.sort((a, b) => b.position.z - a.position.z);
         // Render back pane (before any water layers)
         this.renderBack();
+        // Render gravel
+        this.renderGravel();
         // Render fish behind the first water layer (z > this.depth, at the absolute back)
         for (let fish of this.fish) {
             if (fish.position.z >= this.depth) {
@@ -103,5 +108,25 @@ export class Tank {
         // FRONT: Render front water level line
         strokeWeight(2);
         line(this.x, this.waterLevelTop, this.x + this.width, this.waterLevelTop);
+    }
+    renderGravel() {
+        // Skip if texture isn't loaded yet
+        if (!this.gravelBottom || !this.gravelFront)
+            return;
+        push();
+        // Calculate scaling factor based on tank width
+        const scale = this.width / 896; // scale to fit tank width
+        const scaledWidth = 896 * scale;
+        const scaledHeight = 512 * scale;
+        // Position the image:
+        // x: align with tank left edge
+        // y: align bottom of image with bottom of tank
+        image(this.gravelBottom, this.x, // left align with tank
+        this.waterLevelBottom - scaledHeight - this.gravelHeight, // bottom align with tank
+        scaledWidth, scaledHeight);
+        image(this.gravelFront, this.x, this.waterLevelBottom - this.gravelHeight, scaledWidth, this.gravelHeight, 
+        // @ts-ignore
+        0, 0, 896, this.gravelHeight / scale);
+        pop();
     }
 }
