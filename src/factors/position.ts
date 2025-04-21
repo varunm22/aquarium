@@ -1,5 +1,6 @@
 import { Factor } from './factor.js';
 import { Vector } from '../vector.js';
+import { getTankBounds } from '../constants.js';
 
 export class Position extends Factor<Vector> {
     private accelerationDuration: number = 0;
@@ -42,10 +43,10 @@ export class Position extends Factor<Vector> {
     update(): void {
         super.update();
         
-        // Constrain position to tank bounds
+        const bounds = getTankBounds();
         const constrained = this.value.constrainVector(
-            new Vector(150, 200, 20),
-            new Vector(850, 630, 400)
+            bounds.min,
+            bounds.max
         );
 
         // Check if we're at any boundaries and bounce accordingly

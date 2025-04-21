@@ -1,25 +1,26 @@
+import { TANK_CONSTANTS } from './constants.js';
 export class Tank {
     constructor(x, y, width, height, depth) {
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
-        this.depth = depth;
-        // Back pane properties (scaled and centered)
-        this.backX = this.x + (this.width - this.width * 0.7) / 2;
-        this.backY = this.y + (this.height - this.height * 0.7) / 2;
-        this.backWidth = this.width * 0.7;
-        this.backHeight = this.height * 0.7;
-        // Water level properties
-        this.waterLevelTop = this.y + this.height * 0.1;
+        // Use constants for initialization
+        this.x = TANK_CONSTANTS.X;
+        this.y = TANK_CONSTANTS.Y;
+        this.width = TANK_CONSTANTS.WIDTH;
+        this.height = TANK_CONSTANTS.HEIGHT;
+        this.depth = TANK_CONSTANTS.DEPTH;
+        // Calculate derived values using the same constants
+        this.backX = this.x + (this.width - this.width * TANK_CONSTANTS.BACK_SCALE) / 2;
+        this.backY = this.y + (this.height - this.height * TANK_CONSTANTS.BACK_SCALE) / 2;
+        this.backWidth = this.width * TANK_CONSTANTS.BACK_SCALE;
+        this.backHeight = this.height * TANK_CONSTANTS.BACK_SCALE;
+        this.waterLevelTop = this.y + this.height * TANK_CONSTANTS.WATER_LEVEL_PERCENT;
         this.waterLevelBottom = this.y + this.height;
-        this.waterLevelTopBack = this.backY + this.backHeight * 0.1;
+        this.waterLevelTopBack = this.backY + this.backHeight * TANK_CONSTANTS.WATER_LEVEL_PERCENT;
         this.waterLevelBottomBack = this.backY + this.backHeight;
         this.numLayers = 20;
         this.fish = [];
         this.gravelBottom = loadImage('assets/gravel-transform.png');
         this.gravelFront = loadImage('assets/gravel-front.png');
-        this.gravelHeight = 20;
+        this.gravelHeight = TANK_CONSTANTS.GRAVEL_HEIGHT;
     }
     addFish(fish) {
         this.fish.push(fish);
@@ -122,11 +123,11 @@ export class Tank {
         // x: align with tank left edge
         // y: align bottom of image with bottom of tank
         image(this.gravelBottom, this.x, // left align with tank
-        this.waterLevelBottom - scaledHeight - this.gravelHeight, // bottom align with tank
+        this.waterLevelBottom - scaledHeight - TANK_CONSTANTS.GRAVEL_HEIGHT, // bottom align with tank
         scaledWidth, scaledHeight);
-        image(this.gravelFront, this.x, this.waterLevelBottom - this.gravelHeight, scaledWidth, this.gravelHeight, 
+        image(this.gravelFront, this.x, this.waterLevelBottom - TANK_CONSTANTS.GRAVEL_HEIGHT, scaledWidth, TANK_CONSTANTS.GRAVEL_HEIGHT, 
         // @ts-ignore
-        0, 0, 896, this.gravelHeight / scale);
+        0, 0, 896, TANK_CONSTANTS.GRAVEL_HEIGHT / scale);
         pop();
     }
 }
