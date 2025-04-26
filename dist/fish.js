@@ -78,9 +78,9 @@ export class Fish extends Inhabitant {
                 totalForce.addInPlace(this.calculateRepulsionForce(other, 0.5, 1));
             }
         }
-        if (!can_see_user_fish) {
-            // Add some random movement when no user fish in view
-            totalForce.addInPlace(Vector.random(-0.1, 0.1));
+        if (fish_in_view.length === 0 && Math.random() < 0.02) {
+            // 10% chance to add random movement when no fish in view
+            totalForce.addInPlace(Vector.random(-1, 1));
         }
         // Apply the combined force
         this.position.applyAcceleration(totalForce, 1);
