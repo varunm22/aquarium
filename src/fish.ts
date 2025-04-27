@@ -106,7 +106,7 @@ export class Fish extends Inhabitant {
           if (distance > 150) {
             // Weak attraction to other fish when far
             totalForce.addInPlace(this.calculateAttractionForce(other, 0.1, 0.001));
-          } else if (distance < 100) {
+          } else if (distance < 150) {
             // Strong repulsion from other fish when close
             totalForce.addInPlace(this.calculateRepulsionForce(other, 0.1, 0.1));
           }
@@ -153,11 +153,11 @@ export class Fish extends Inhabitant {
 
     private getVerticalTilt(): number {
       const delta = this.position.delta;
-      const horizontalMagnitude = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
-      if (horizontalMagnitude === 0) return 0;
+      if (delta.x === 0) return 0;
       
       // Calculate angle between horizontal movement and vertical movement
-      const angle = Math.atan2(delta.y, horizontalMagnitude);
+      // adding 2 so that tilt is minimal when facing forward or back
+      const angle = Math.atan2(delta.y, Math.abs(delta.x) + 2);
       // Negate the angle if moving left (negative x)
       return delta.x < 0 ? -angle : angle;
     }
