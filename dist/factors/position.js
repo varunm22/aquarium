@@ -56,6 +56,6 @@ export class Position extends Factor {
             }
         }
         // Apply speed decay
-        this.delta.multiplyInPlace(0.95);
+        this.delta.multiplyInPlace(0.98);
     }
 }

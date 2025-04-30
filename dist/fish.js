@@ -56,14 +56,14 @@ export class Fish extends Inhabitant {
         for (let other of fish_in_view) {
             if (other instanceof UserFish) {
                 can_see_user_fish = true;
-                // Strong attraction to user fish
-                totalForce.addInPlace(this.calculateAttractionForce(other, 0.1, 0.001));
+                // weak attraction to user fish
+                totalForce.addInPlace(this.calculateAttractionForce(other, 0.02, 0.0005));
             }
             else {
                 const distance = this.distanceTo(other);
                 if (distance > 150) {
                     // Weak attraction to other fish when far
-                    totalForce.addInPlace(this.calculateAttractionForce(other, 0.1, 0.001));
+                    totalForce.addInPlace(this.calculateAttractionForce(other, 0.02, 0.0005));
                 }
                 else if (distance < 150) {
                     // Strong repulsion from other fish when close
@@ -80,7 +80,7 @@ export class Fish extends Inhabitant {
         }
         if (fish_in_view.length === 0 && Math.random() < 0.02) {
             // 10% chance to add random movement when no fish in view
-            totalForce.addInPlace(Vector.random(-1, 1));
+            totalForce.addInPlace(Vector.random(-0.7, 0.7));
         }
         // Apply the combined force
         this.position.applyAcceleration(totalForce, 1);
