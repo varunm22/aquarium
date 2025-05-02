@@ -59,9 +59,9 @@ export class Fish extends Inhabitant {
                 totalForce.addInPlace(this.calculateRepulsionForce(other, 0.5, 1));
             }
         }
-        if (fish_in_view.length === 0 && Math.random() < 0.02) {
+        if (fish_in_view.length === 0 && Math.random() < 0.25) {
             // 2% chance to add random movement when no fish in view
-            totalForce.addInPlace(Vector.random(-0.7, 0.7));
+            totalForce.addInPlace(Vector.random(-0.01, 0.01));
         }
         return totalForce;
     }
@@ -83,20 +83,20 @@ export class Fish extends Inhabitant {
         const netForce = this.calculateNetForce(fish_in_view, fish_in_proximity);
         const forceMagnitude = netForce.magnitude();
         // Update initiative based on force magnitude
-        this.initiative.delta = forceMagnitude; // Scale force to initiative gain
+        this.initiative.delta = forceMagnitude * 2; // Scale force to initiative gain
         this.initiative.update();
         // Check if fish should move based on initiative
         if (Math.random() < this.initiative.value) {
             // Normalize the force vector for direction
             const direction = netForce.divide(forceMagnitude || 1);
             // Calculate movement magnitude with some variance
-            const baseMagnitude = this.initiative.value * 0.5; // Scale initiative to movement
+            const baseMagnitude = this.initiative.value;
             const variance = 0.2; // 20% variance
             const magnitude = baseMagnitude * (1 + (Math.random() - 0.5) * variance);
             // Apply the movement
             this.position.applyAcceleration(direction.multiply(magnitude), 1);
             // Reduce initiative after movement
-            this.initiative.value *= 0.5; // Reduce by 50%
+            this.initiative.value *= 0.25; // Reduce by 50%
         }
         super.update(inhabitants);
     }
