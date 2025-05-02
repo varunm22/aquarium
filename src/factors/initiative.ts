@@ -10,6 +10,6 @@ export class Initiative extends Factor<number> {
         super.update();
         
         // Constrain initiative to reasonable bounds
-        this.value = Math.max(0, Math.min(this.value, 100));
+        this.value = Math.max(0, Math.min(this.value, 1));
     }
 } 

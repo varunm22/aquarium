@@ -2,30 +2,15 @@ import { Inhabitant } from './inhabitant.js';
 import { Vector } from './vector.js';
 import { UserFish } from './userfish.js';
 import { Position } from './factors/position.js';
+import { Initiative } from './factors/initiative.js';
 export class Fish extends Inhabitant {
     constructor(x, y, z, size) {
         const position = new Position(new Vector(x, y, z), Vector.random(-1, 1));
         super(position, size);
+        this.initiative = new Initiative(0);
     }
     static loadSpritesheet() {
         Fish.spritesheet = loadImage('assets/tetra_small_clear.png');
-    }
-    update(inhabitants) {
-        // React to other fish within the field of view
-        const fish_in_view = [];
-        const fish_in_proximity = [];
-        for (let other of inhabitants) {
-            if (other !== this) {
-                if (this.isInFieldOfView(other, 45, 200)) {
-                    fish_in_view.push(other);
-                }
-                else if (this.distanceTo(other) <= 50) { // Check proximity if not in view
-                    fish_in_proximity.push(other);
-                }
-            }
-        }
-        this.reactToAllFish(fish_in_view, fish_in_proximity);
-        super.update(inhabitants);
     }
     calculateAttractionForce(other, maxSpeed, multiplier) {
         const direction = other.position.value.subtract(this.position.value);
@@ -47,15 +32,11 @@ export class Fish extends Inhabitant {
         }
         return direction;
     }
-    reactToAllFish(fish_in_view, fish_in_proximity) {
-        // Reset ddelta to ensure clean force application
-        this.position.ddelta = Vector.zero();
+    calculateNetForce(fish_in_view, fish_in_proximity) {
         let totalForce = Vector.zero();
-        let can_see_user_fish = false;
         // Handle fish in visual range
         for (let other of fish_in_view) {
             if (other instanceof UserFish) {
-                can_see_user_fish = true;
                 // weak attraction to user fish
                 totalForce.addInPlace(this.calculateAttractionForce(other, 0.02, 0.0005));
             }
@@ -79,11 +60,45 @@ export class Fish extends Inhabitant {
             }
         }
         if (fish_in_view.length === 0 && Math.random() < 0.02) {
-            // 10% chance to add random movement when no fish in view
+            // 2% chance to add random movement when no fish in view
             totalForce.addInPlace(Vector.random(-0.7, 0.7));
         }
-        // Apply the combined force
-        this.position.applyAcceleration(totalForce, 1);
+        return totalForce;
+    }
+    update(inhabitants) {
+        // React to other fish within the field of view
+        const fish_in_view = [];
+        const fish_in_proximity = [];
+        for (let other of inhabitants) {
+            if (other !== this) {
+                if (this.isInFieldOfView(other, 45, 200)) {
+                    fish_in_view.push(other);
+                }
+                else if (this.distanceTo(other) <= 50) { // Check proximity if not in view
+                    fish_in_proximity.push(other);
+                }
+            }
+        }
+        // Calculate net force
+        const netForce = this.calculateNetForce(fish_in_view, fish_in_proximity);
+        const forceMagnitude = netForce.magnitude();
+        // Update initiative based on force magnitude
+        this.initiative.delta = forceMagnitude; // Scale force to initiative gain
+        this.initiative.update();
+        // Check if fish should move based on initiative
+        if (Math.random() < this.initiative.value) {
+            // Normalize the force vector for direction
+            const direction = netForce.divide(forceMagnitude || 1);
+            // Calculate movement magnitude with some variance
+            const baseMagnitude = this.initiative.value * 0.5; // Scale initiative to movement
+            const variance = 0.2; // 20% variance
+            const magnitude = baseMagnitude * (1 + (Math.random() - 0.5) * variance);
+            // Apply the movement
+            this.position.applyAcceleration(direction.multiply(magnitude), 1);
+            // Reduce initiative after movement
+            this.initiative.value *= 0.5; // Reduce by 50%
+        }
+        super.update(inhabitants);
     }
     getSpriteIndex() {
         const delta = this.position.delta;

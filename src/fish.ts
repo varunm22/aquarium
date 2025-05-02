@@ -3,6 +3,7 @@ import { Vector } from './vector.js';
 import { UserFish } from './userfish.js';
 import { Tank } from './tank.js';
 import { Position } from './factors/position.js';
+import { Initiative } from './factors/initiative.js';
 
 // Declare p5.js global functions
 declare function image(img: p5.Image, x: number, y: number, w: number, h: number, sx: number, sy: number, sw: number, sh: number): void;
@@ -38,32 +39,16 @@ export class Fish extends Inhabitant {
         { x: 44, y: 54, width: 26, height: 41 } // back
     ];
 
+    private initiative: Initiative;
+
     constructor(x: number, y: number, z: number, size: number) {
       const position = new Position(new Vector(x, y, z), Vector.random(-1, 1));
       super(position, size);
+      this.initiative = new Initiative(0);
     }
 
     static loadSpritesheet(): void {
       Fish.spritesheet = loadImage('assets/tetra_small_clear.png');
-    }
-
-    update(inhabitants: Inhabitant[]): void {
-      // React to other fish within the field of view
-      const fish_in_view: Inhabitant[] = [];
-      const fish_in_proximity: Inhabitant[] = [];
-      
-      for (let other of inhabitants) {
-        if (other !== this) {
-          if (this.isInFieldOfView(other, 45, 200)) {
-            fish_in_view.push(other);
-          } else if (this.distanceTo(other) <= 50) { // Check proximity if not in view
-            fish_in_proximity.push(other);
-          }
-        }
-      }
-
-      this.reactToAllFish(fish_in_view, fish_in_proximity);
-      super.update(inhabitants);
     }
 
     private calculateAttractionForce(other: Inhabitant, maxSpeed: number, multiplier: number): Vector {
@@ -88,17 +73,12 @@ export class Fish extends Inhabitant {
       return direction;
     }
 
-    reactToAllFish(fish_in_view: Inhabitant[], fish_in_proximity: Inhabitant[]): void {
-      // Reset ddelta to ensure clean force application
-      this.position.ddelta = Vector.zero();
-      
+    private calculateNetForce(fish_in_view: Inhabitant[], fish_in_proximity: Inhabitant[]): Vector {
       let totalForce = Vector.zero();
-      let can_see_user_fish = false;
 
       // Handle fish in visual range
       for (let other of fish_in_view) {
         if (other instanceof UserFish) {
-          can_see_user_fish = true;
           // weak attraction to user fish
           totalForce.addInPlace(this.calculateAttractionForce(other, 0.02, 0.0005));
         } else {
@@ -122,12 +102,54 @@ export class Fish extends Inhabitant {
       }
 
       if (fish_in_view.length === 0 && Math.random() < 0.02) {
-        // 10% chance to add random movement when no fish in view
+        // 2% chance to add random movement when no fish in view
         totalForce.addInPlace(Vector.random(-0.7, 0.7));
       }
 
-      // Apply the combined force
-      this.position.applyAcceleration(totalForce, 1);
+      return totalForce;
+    }
+
+    update(inhabitants: Inhabitant[]): void {
+      // React to other fish within the field of view
+      const fish_in_view: Inhabitant[] = [];
+      const fish_in_proximity: Inhabitant[] = [];
+      
+      for (let other of inhabitants) {
+        if (other !== this) {
+          if (this.isInFieldOfView(other, 45, 200)) {
+            fish_in_view.push(other);
+          } else if (this.distanceTo(other) <= 50) { // Check proximity if not in view
+            fish_in_proximity.push(other);
+          }
+        }
+      }
+
+      // Calculate net force
+      const netForce = this.calculateNetForce(fish_in_view, fish_in_proximity);
+      const forceMagnitude = netForce.magnitude();
+
+      // Update initiative based on force magnitude
+      this.initiative.delta = forceMagnitude; // Scale force to initiative gain
+      this.initiative.update();
+
+      // Check if fish should move based on initiative
+      if (Math.random() < this.initiative.value) {
+        // Normalize the force vector for direction
+        const direction = netForce.divide(forceMagnitude || 1);
+        
+        // Calculate movement magnitude with some variance
+        const baseMagnitude = this.initiative.value * 0.5; // Scale initiative to movement
+        const variance = 0.2; // 20% variance
+        const magnitude = baseMagnitude * (1 + (Math.random() - 0.5) * variance);
+        
+        // Apply the movement
+        this.position.applyAcceleration(direction.multiply(magnitude), 1);
+        
+        // Reduce initiative after movement
+        this.initiative.value *= 0.5; // Reduce by 50%
+      }
+
+      super.update(inhabitants);
     }
 
     private getSpriteIndex(): { index: number; mirrored: boolean } {
