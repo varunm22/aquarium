@@ -1,5 +1,8 @@
 import { Fish } from './fish.js';
 import { UserFish } from './userfish.js';
+// p5.js constants
+const CENTER = 'center';
+const LEFT = 'left';
 export class SidePane {
     constructor(tank) {
         this.selectedView = 'fish';
@@ -26,47 +29,61 @@ export class SidePane {
     }
     render(tank) {
         // Draw the side pane background
-        fill(240, 240, 240);
-        stroke(200, 200, 200);
+        fill(220, 240, 255); // Lighter water blue background
+        stroke(150, 190, 210); // Darker water blue border
         strokeWeight(1);
         rect(this.x, this.y, this.width, this.height);
-        // Draw the sticky header
-        this.renderHeader();
+        // Draw the content first
         if (this.selectedView === 'fish') {
             this.renderFishView(tank);
         }
         else {
             this.renderChemView();
         }
+        // Draw the masking frame
+        this.drawMaskingFrame(tank);
+        // Draw the sticky header last (on top of everything)
+        this.renderHeader();
     }
     renderHeader() {
         const buttonWidth = 60;
-        const buttonHeight = 30;
-        const buttonY = this.y + this.padding;
+        const buttonHeight = 40; // Increased height for equal padding
+        const buttonY = this.y + (this.rowHeight - buttonHeight) / 2; // Center vertically in header
+        // Draw header background with border
+        fill(220, 240, 255); // Lighter water blue background
+        stroke(150, 190, 210); // Darker water blue border
+        strokeWeight(1);
+        rect(this.x, this.y, this.width, this.rowHeight);
         // Fish button
         const fishButtonX = this.x + this.padding;
-        fill(this.selectedView === 'fish' ? 200 : 220);
+        fill(200, 220, 240); // Unselected water blue
+        if (this.selectedView === 'fish')
+            fill(180, 200, 220); // Selected water blue
+        stroke(150, 190, 210); // Darker water blue border
+        strokeWeight(1);
         rect(fishButtonX, buttonY, buttonWidth, buttonHeight);
-        fill(0);
+        fill(0, 0, 0);
         textSize(12);
-        textAlign(0.5, 0.5);
+        textAlign(CENTER, CENTER);
         text('fish', fishButtonX + buttonWidth / 2, buttonY + buttonHeight / 2);
         // Chem button
         const chemButtonX = fishButtonX + buttonWidth + this.padding;
-        fill(this.selectedView === 'chem' ? 200 : 220);
+        fill(200, 220, 240); // Unselected water blue
+        if (this.selectedView === 'chem')
+            fill(180, 200, 220); // Selected water blue
+        stroke(150, 190, 210); // Darker water blue border
+        strokeWeight(1);
         rect(chemButtonX, buttonY, buttonWidth, buttonHeight);
-        fill(0);
+        fill(0, 0, 0);
         text('chem', chemButtonX + buttonWidth / 2, buttonY + buttonHeight / 2);
         // Add click handlers
-        if (mouseIsPressed()) {
-            const mx = mouseX();
-            const my = mouseY();
-            if (mx >= fishButtonX && mx <= fishButtonX + buttonWidth &&
-                my >= buttonY && my <= buttonY + buttonHeight) {
+        if (mouseIsPressed) {
+            if (mouseX >= fishButtonX && mouseX <= fishButtonX + buttonWidth &&
+                mouseY >= buttonY && mouseY <= buttonY + buttonHeight) {
                 this.selectedView = 'fish';
             }
-            else if (mx >= chemButtonX && mx <= chemButtonX + buttonWidth &&
-                my >= buttonY && my <= buttonY + buttonHeight) {
+            else if (mouseX >= chemButtonX && mouseX <= chemButtonX + buttonWidth &&
+                mouseY >= buttonY && mouseY <= buttonY + buttonHeight) {
                 this.selectedView = 'chem';
             }
         }
@@ -84,15 +101,19 @@ export class SidePane {
         for (let i = startRow; i < endRow; i++) {
             if (i >= 0 && i < regularFish.length) {
                 const rowY = this.y + this.rowHeight + this.padding + (i * this.rowHeight) - this.scrollOffset;
+                // Draw row separator
+                stroke(150, 190, 210); // Darker water blue separator
+                strokeWeight(1);
+                line(this.x, rowY + this.rowHeight, this.x + this.width, rowY + this.rowHeight);
                 this.renderFishInfo(regularFish[i], rowY);
             }
         }
     }
     renderChemView() {
         const rowY = this.y + this.rowHeight + this.padding;
-        fill(0);
+        fill(0, 0, 0);
         textSize(12);
-        textAlign(0, 0.5);
+        textAlign(LEFT, CENTER);
         text('Coming soon', this.x + this.padding, rowY + this.rowHeight / 2);
     }
     drawMaskingFrame(tank) {
@@ -101,17 +122,16 @@ export class SidePane {
         // Set fill and stroke properties for masking frame
         fill(255, 255, 255); // White fill to match background
         noStroke(); // No stroke for cleaner masking
-        // Create four rectangles to mask overflow on all sides
-        // Top mask (extends above the pane)
-        rect(this.x - 10, 0, this.width + 20, this.y);
+        // Create three rectangles to mask overflow on top, bottom, and right sides
+        // Top mask (starts below the selector buttons)
+        const selectorBottom = this.y + this.rowHeight;
+        rect(this.x - 10, selectorBottom, this.width + 20, this.y - selectorBottom);
         // Bottom mask (extends below the pane)
         rect(this.x - 10, this.y + this.height, this.width + 20, tank.height + 100);
-        // Left mask (covers area left of the pane)
-        rect(tank.x + tank.width, 0, this.x - (tank.x + tank.width), tank.height + 100);
         // Right mask (covers area right of the pane)
         rect(this.x + this.width, 0, 500, tank.height + 100); // Using 500 as a safe width
         // Redraw the pane border which was covered by our masks
-        stroke(200, 200, 200);
+        stroke(150, 190, 210); // Darker water blue border
         strokeWeight(1);
         noFill();
         rect(this.x, this.y, this.width, this.height);
@@ -143,6 +163,7 @@ export class SidePane {
         textSize(12);
         fill(0, 0, 0); // Black text
         noStroke();
+        textAlign(LEFT, CENTER);
         const infoX = this.x + this.padding + 50; // Start after the sprite
         const infoY = y + this.rowHeight / 2;
         // Position information
