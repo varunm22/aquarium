@@ -1,6 +1,5 @@
 import { Inhabitant } from './inhabitant.js';
 import { Vector } from './vector.js';
-import { UserFish } from './userfish.js';
 import { Position } from './factors/position.js';
 import { Initiative } from './factors/initiative.js';
 export class Fish extends Inhabitant {
@@ -36,7 +35,7 @@ export class Fish extends Inhabitant {
         let totalForce = Vector.zero();
         // Handle fish in visual range
         for (let other of fish_in_view) {
-            if (other instanceof UserFish) {
+            if (other.constructor.name === 'UserFish') {
                 // weak attraction to user fish
                 totalForce.addInPlace(this.calculateAttractionForce(other, 0.02, 0.0005));
             }
@@ -54,7 +53,7 @@ export class Fish extends Inhabitant {
         }
         // Handle fish in proximity but not in view
         for (let other of fish_in_proximity) {
-            if (other instanceof Fish) { // Only react to regular Fish
+            if (other.constructor.name === 'Fish') { // Only react to regular Fish
                 // Strong repulsion from fish detected by proximity
                 totalForce.addInPlace(this.calculateRepulsionForce(other, 0.5, 1));
             }
@@ -100,31 +99,6 @@ export class Fish extends Inhabitant {
         }
         super.update(inhabitants);
     }
-    getSpriteIndex() {
-        const delta = this.position.delta;
-        const x = delta.x;
-        const z = delta.z;
-        // Calculate angle in radians
-        const angle = Math.atan2(z, x);
-        // Convert to degrees and normalize to 0-360
-        const degrees = ((angle * 180 / Math.PI) + 270) % 360;
-        // Map to octants
-        if (degrees >= 337.5 || degrees < 22.5)
-            return { index: 0, mirrored: false }; // front
-        if (degrees >= 22.5 && degrees < 67.5)
-            return { index: 1, mirrored: false }; // front-left
-        if (degrees >= 67.5 && degrees < 112.5)
-            return { index: 2, mirrored: false }; // left
-        if (degrees >= 112.5 && degrees < 157.5)
-            return { index: 3, mirrored: false }; // left-back
-        if (degrees >= 157.5 && degrees < 202.5)
-            return { index: 4, mirrored: false }; // back
-        if (degrees >= 202.5 && degrees < 247.5)
-            return { index: 3, mirrored: true }; // back-right
-        if (degrees >= 247.5 && degrees < 292.5)
-            return { index: 2, mirrored: true }; // right
-        return { index: 1, mirrored: true }; // right-front
-    }
     getVerticalTilt() {
         const delta = this.position.delta;
         if (delta.x === 0)
@@ -134,6 +108,31 @@ export class Fish extends Inhabitant {
         const angle = Math.atan2(delta.y, Math.abs(delta.x) + 2);
         // Negate the angle if moving left (negative x)
         return delta.x < 0 ? -angle : angle;
+    }
+    getSpriteIndex() {
+        const delta = this.position.delta;
+        const x = delta.x;
+        const z = delta.z;
+        // Calculate angle in radians
+        const angle = Math.atan2(z, x);
+        // Convert to degrees and normalize to 0-360
+        const degrees = (angle * 180 / Math.PI + 180) % 360;
+        // Map to octants
+        if (degrees >= 337.5 || degrees < 22.5)
+            return { index: 2, mirrored: false }; // left
+        if (degrees >= 22.5 && degrees < 67.5)
+            return { index: 1, mirrored: false }; // front-left
+        if (degrees >= 67.5 && degrees < 112.5)
+            return { index: 0, mirrored: false }; // front
+        if (degrees >= 112.5 && degrees < 157.5)
+            return { index: 1, mirrored: true }; // front-right
+        if (degrees >= 157.5 && degrees < 202.5)
+            return { index: 2, mirrored: true }; // right
+        if (degrees >= 202.5 && degrees < 247.5)
+            return { index: 3, mirrored: true }; // back-right
+        if (degrees >= 247.5 && degrees < 292.5)
+            return { index: 4, mirrored: false }; // back
+        return { index: 3, mirrored: false }; // back-left
     }
     render(tank) {
         if (!Fish.spritesheet)

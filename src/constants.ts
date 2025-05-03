@@ -3,7 +3,7 @@ import { Vector } from './vector.js';
 // Tank dimensions and positioning will be calculated relative to these base values
 export const TANK_CONSTANTS = {
     // Base position and dimensions
-    X: 150,
+    X: 75,
     Y: 200,
     WIDTH: 700,
     HEIGHT: 430,
