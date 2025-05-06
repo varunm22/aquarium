@@ -4,7 +4,7 @@ import { Fish } from './fish.js';
 import { UserFish } from './userfish.js';
 
 // Declare p5.js global functions
-declare function fill(r: number, g: number, b: number): void;
+declare function fill(r: number, g: number, b: number, a?: number): void;
 declare function stroke(r: number, g: number, b: number): void;
 declare function strokeWeight(weight: number): void;
 declare function rect(x: number, y: number, w: number, h: number): void;
@@ -20,6 +20,7 @@ declare function pop(): void;
 declare const mouseIsPressed: boolean;
 declare const mouseX: number;
 declare const mouseY: number;
+declare function random(min: number, max: number): number;
 
 // p5.js constants
 const CENTER = 'center';
@@ -40,13 +41,22 @@ export class SidePane {
     private scrollOffset: number;
     private maxScroll: number;
     private selectedView: 'fish' | 'chem' = 'fish';
+    private tank: Tank;
+    private headerHeight: number = 40;
+    private footerHeight: number = 40;
+    private mouseWasPressed: boolean = false;
+    private readonly tabs: { id: 'fish' | 'chem', label: string }[] = [
+        { id: 'fish', label: 'fish' },
+        { id: 'chem', label: 'chem' }
+    ];
 
     constructor(tank: Tank) {
+        this.tank = tank;
         this.x = tank.x + tank.width + 50; // 50px gap from tank
         this.y = tank.y;
         this.width = tank.width / 3;
         this.height = tank.height;
-        this.rowHeight = 60; // Height for each fish row
+        this.rowHeight = 60;
         this.padding = 10;
         this.scrollOffset = 0;
         this.maxScroll = 0;
@@ -66,10 +76,60 @@ export class SidePane {
         }
     }
 
-    render(tank: Tank): void {
-        // Draw the side pane background
+
+    private addNewFish(): void {
+        const x = random(this.tank.x, this.tank.x + this.tank.width);
+        const y = random(this.tank.y, this.tank.y + this.tank.height);
+        const z = random(0, this.tank.depth);
+        const size = random(20, 30);
+        this.tank.addFish(new Fish(x, y, z, size));
+    }
+
+    private renderFooter(): void {
+        const footerY = this.y + this.height - this.footerHeight;
+        
+        // Draw footer background
         fill(220, 240, 255); // Lighter water blue background
         stroke(150, 190, 210); // Darker water blue border
+        strokeWeight(1);
+        rect(this.x, footerY, this.width, this.footerHeight);
+
+        // Add New button
+        const buttonSize = 20;
+        const buttonX = this.x + this.padding;
+        const buttonY = footerY + (this.footerHeight - buttonSize) / 2;
+
+        // Draw button
+        fill(100, 200, 100); // Green
+        stroke(50, 150, 50); // Darker green border
+        strokeWeight(1);
+        rect(buttonX, buttonY, buttonSize, buttonSize);
+
+        // Draw plus sign
+        fill(255, 255, 255);
+        noStroke();
+        textSize(12);
+        textAlign(CENTER, CENTER);
+        text('+', buttonX + buttonSize/2, buttonY + buttonSize/2);
+
+        // Draw text
+        fill(0, 0, 0);
+        textAlign(LEFT, CENTER);
+        text('Add New', buttonX + buttonSize + 10, buttonY + buttonSize/2);
+
+        // Handle click release
+        if (this.mouseWasPressed && !mouseIsPressed) {
+            if (mouseX >= buttonX && mouseX <= buttonX + buttonSize &&
+                mouseY >= buttonY && mouseY <= buttonY + buttonSize) {
+                this.addNewFish();
+            }
+        }
+    }
+
+    render(tank: Tank): void {
+        // Draw the side pane background
+        fill(220, 240, 255);
+        stroke(150, 190, 210);
         strokeWeight(1);
         rect(this.x, this.y, this.width, this.height);
 
@@ -83,51 +143,67 @@ export class SidePane {
         // Draw the masking frame
         this.drawMaskingFrame(tank);
 
+        // Reset fill and stroke for header
+        fill(220, 240, 255);
+        stroke(150, 190, 210);
+        strokeWeight(1);
+
         // Draw the sticky header last (on top of everything)
         this.renderHeader();
+
+        // Draw the footer
+        this.renderFooter();
+
+        // Update mouse state for next frame
+        this.mouseWasPressed = mouseIsPressed;
     }
 
     private renderHeader(): void {
-        const buttonWidth = 60;
-        const buttonHeight = 40; // Increased height for equal padding
-        const buttonY = this.y + (this.rowHeight - buttonHeight) / 2; // Center vertically in header
+        const tabWidth = this.width / this.tabs.length;
         
-        // Draw header background with border
-        fill(220, 240, 255); // Lighter water blue background
-        stroke(150, 190, 210); // Darker water blue border
-        strokeWeight(1);
-        rect(this.x, this.y, this.width, this.rowHeight);
-        
-        // Fish button
-        const fishButtonX = this.x + this.padding;
-        fill(200, 220, 240); // Unselected water blue
-        if (this.selectedView === 'fish') fill(180, 200, 220); // Selected water blue
-        stroke(150, 190, 210); // Darker water blue border
-        strokeWeight(1);
-        rect(fishButtonX, buttonY, buttonWidth, buttonHeight);
-        fill(0, 0, 0);
-        textSize(12);
-        textAlign(CENTER, CENTER);
-        text('fish', fishButtonX + buttonWidth/2, buttonY + buttonHeight/2);
-
-        // Chem button
-        const chemButtonX = fishButtonX + buttonWidth + this.padding;
-        fill(200, 220, 240); // Unselected water blue
-        if (this.selectedView === 'chem') fill(180, 200, 220); // Selected water blue
-        stroke(150, 190, 210); // Darker water blue border
-        strokeWeight(1);
-        rect(chemButtonX, buttonY, buttonWidth, buttonHeight);
-        fill(0, 0, 0);
-        text('chem', chemButtonX + buttonWidth/2, buttonY + buttonHeight/2);
-
-        // Add click handlers
-        if (mouseIsPressed) {
-            if (mouseX >= fishButtonX && mouseX <= fishButtonX + buttonWidth &&
-                mouseY >= buttonY && mouseY <= buttonY + buttonHeight) {
-                this.selectedView = 'fish';
-            } else if (mouseX >= chemButtonX && mouseX <= chemButtonX + buttonWidth &&
-                       mouseY >= buttonY && mouseY <= buttonY + buttonHeight) {
-                this.selectedView = 'chem';
+        this.tabs.forEach((tab, index) => {
+            const tabX = this.x + (index * tabWidth);
+            const isSelected = this.selectedView === tab.id;
+            
+            // Draw tab background
+            fill(isSelected ? 220 : 180, isSelected ? 240 : 200, isSelected ? 255 : 220);
+            stroke(150, 190, 210);
+            strokeWeight(1);
+            
+            // Draw tab with background
+            if (isSelected) {
+                // Draw rectangle for the background first
+                rect(tabX, this.y, tabWidth, this.headerHeight);
+                
+                // Now draw the lines (except bottom) to create the tab effect
+                stroke(150, 190, 210);
+                strokeWeight(1);
+                line(tabX, this.y, tabX + tabWidth, this.y); // Top
+                line(tabX, this.y, tabX, this.y + this.headerHeight); // Left
+                line(tabX + tabWidth, this.y, tabX + tabWidth, this.y + this.headerHeight); // Right
+                
+                // Draw a line at the bottom with the same color as the background to "erase" the bottom border
+                stroke(220, 240, 255);
+                strokeWeight(2); // Slightly thicker to fully cover the existing border
+                line(tabX + 1, this.y + this.headerHeight, tabX + tabWidth - 1, this.y + this.headerHeight);
+            } else {
+                // Unselected tab: draw all borders with background
+                rect(tabX, this.y, tabWidth, this.headerHeight);
+            }
+            
+            // Draw tab text
+            fill(0, 0, 0);
+            textSize(12);
+            textAlign(CENTER, CENTER);
+            text(tab.label, tabX + tabWidth/2, this.y + this.headerHeight/2);
+        });
+    
+        // Handle tab clicks
+        if (this.mouseWasPressed && !mouseIsPressed) {
+            const clickedTabIndex = Math.floor((mouseX - this.x) / tabWidth);
+            if (clickedTabIndex >= 0 && clickedTabIndex < this.tabs.length &&
+                mouseY >= this.y && mouseY <= this.y + this.headerHeight) {
+                this.selectedView = this.tabs[clickedTabIndex].id;
             }
         }
     }
@@ -136,7 +212,7 @@ export class SidePane {
         // Calculate max scroll based on number of fish and visible rows
         const regularFish = tank.fish.filter(fish => fish instanceof Fish && !(fish instanceof UserFish));
         const totalHeight = regularFish.length * this.rowHeight;
-        const visibleRows = Math.floor((this.height - this.rowHeight) / this.rowHeight);
+        const visibleRows = Math.floor((this.height - this.headerHeight - this.footerHeight) / this.rowHeight);
         this.maxScroll = Math.max(0, totalHeight - visibleRows * this.rowHeight);
 
         // Calculate which rows to show
@@ -146,10 +222,10 @@ export class SidePane {
         // Draw all potentially visible fish rows
         for (let i = startRow; i < endRow; i++) {
             if (i >= 0 && i < regularFish.length) {
-                const rowY = this.y + this.rowHeight + this.padding + (i * this.rowHeight) - this.scrollOffset;
+                const rowY = this.y + this.headerHeight + (i * this.rowHeight) - this.scrollOffset;
                 
                 // Draw row separator
-                stroke(150, 190, 210); // Darker water blue separator
+                stroke(150, 190, 210);
                 strokeWeight(1);
                 line(this.x, rowY + this.rowHeight, this.x + this.width, rowY + this.rowHeight);
                 
@@ -159,7 +235,7 @@ export class SidePane {
     }
 
     private renderChemView(): void {
-        const rowY = this.y + this.rowHeight + this.padding;
+        const rowY = this.y + this.headerHeight;
         fill(0, 0, 0);
         textSize(12);
         textAlign(LEFT, CENTER);
@@ -167,32 +243,24 @@ export class SidePane {
     }
 
     private drawMaskingFrame(tank: Tank): void {
-        // Save current settings
         push();
         
-        // Set fill and stroke properties for masking frame
-        fill(255, 255, 255); // White fill to match background
-        noStroke(); // No stroke for cleaner masking
+        fill(255, 255, 255);
+        noStroke();
         
         // Create three rectangles to mask overflow on top, bottom, and right sides
-        
-        // Top mask (starts below the selector buttons)
-        const selectorBottom = this.y + this.rowHeight;
-        rect(this.x - 10, selectorBottom, this.width + 20, this.y - selectorBottom);
-        
-        // Bottom mask (extends below the pane)
+        const headerBottom = this.y + this.headerHeight;
+        console.log(this.y, this.headerHeight, headerBottom, this.y-headerBottom);
+        rect(this.x - 10, this.y - 20, this.width + 20, headerBottom - this.y + 20);
         rect(this.x - 10, this.y + this.height, this.width + 20, tank.height + 100);
-        
-        // Right mask (covers area right of the pane)
-        rect(this.x + this.width, 0, 500, tank.height + 100); // Using 500 as a safe width
+        rect(this.x + this.width, 0, 500, tank.height + 100);
         
         // Redraw the pane border which was covered by our masks
-        stroke(150, 190, 210); // Darker water blue border
+        stroke(150, 190, 210);
         strokeWeight(1);
         noFill();
         rect(this.x, this.y, this.width, this.height);
         
-        // Restore previous settings
         pop();
     }
 
@@ -245,5 +313,34 @@ export class SidePane {
         // Size information
         text(`Size: ${Math.round(fish.size)}`, infoX, infoY + 10);
         pop();
+
+        // Add delete button
+        const deleteButtonSize = 16;
+        const deleteButtonX = this.x + this.width - deleteButtonSize - this.padding;
+        const deleteButtonY = y + (this.rowHeight - deleteButtonSize) / 2;
+
+        // Draw delete button
+        fill(255, 200, 200); // Light red
+        stroke(200, 100, 100); // Darker red border
+        strokeWeight(1);
+        rect(deleteButtonX, deleteButtonY, deleteButtonSize, deleteButtonSize);
+
+        // Draw X in delete button
+        fill(200, 50, 50); // Darker red X
+        noStroke();
+        textSize(10);
+        textAlign(CENTER, CENTER);
+        text('×', deleteButtonX + deleteButtonSize/2, deleteButtonY + deleteButtonSize/2);
+
+        // Handle delete button click release
+        if (this.mouseWasPressed && !mouseIsPressed) {
+            if (mouseX >= deleteButtonX && mouseX <= deleteButtonX + deleteButtonSize &&
+                mouseY >= deleteButtonY && mouseY <= deleteButtonY + deleteButtonSize) {
+                const index = this.tank.fish.indexOf(fish);
+                if (index > -1) {
+                    this.tank.fish.splice(index, 1);
+                }
+            }
+        }
     }
 } 
