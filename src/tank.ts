@@ -1,5 +1,6 @@
 import { Inhabitant } from './inhabitant.js';
 import { TANK_CONSTANTS } from './constants.js';
+import { Fish } from './fish.js';
 
 // Declare p5.js global functions
 declare function color(r: number, g: number, b: number, a?: number): p5.Color;
@@ -94,11 +95,12 @@ export class Tank {
 
       // Render gravel
       this.renderGravel();
-    
+
+   
       // Render fish behind the first water layer (z > this.depth, at the absolute back)
       for (let fish of this.fish) {
         if (fish.position.z >= this.depth) {
-          fish.render(this, color(173, 216, 230));
+          fish.render(this);
         }
       }
     
@@ -113,7 +115,7 @@ export class Tank {
         // Render fish that fall within this layer
         for (let fish of this.fish) {
           if (fish.position.z >= layerZStart && fish.position.z < layerZEnd) {
-            fish.render(this, color(173, 216, 230));
+            fish.render(this);
           }
         }
     

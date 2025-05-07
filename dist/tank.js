@@ -41,7 +41,7 @@ export class Tank {
         // Render fish behind the first water layer (z > this.depth, at the absolute back)
         for (let fish of this.fish) {
             if (fish.position.z >= this.depth) {
-                fish.render(this, color(173, 216, 230));
+                fish.render(this);
             }
         }
         // Render water layers from back to front
@@ -53,7 +53,7 @@ export class Tank {
             // Render fish that fall within this layer
             for (let fish of this.fish) {
                 if (fish.position.z >= layerZStart && fish.position.z < layerZEnd) {
-                    fish.render(this, color(173, 216, 230));
+                    fish.render(this);
                 }
             }
             // Render the water layer itself

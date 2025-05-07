@@ -2,6 +2,7 @@ import { Tank } from './tank.js';
 import { Fish } from './fish.js';
 import { UserFish } from './userfish.js';
 import { SidePane } from './sidepane.js';
+import { getTankBounds } from './constants.js';
 let tank;
 let sidePane;
 function setup() {
@@ -12,11 +13,13 @@ function setup() {
     sidePane = new SidePane(tank);
     // Load the fish spritesheet
     Fish.loadSpritesheet();
+    // Get tank bounds for proper fish placement
+    const bounds = getTankBounds();
     // Add fish to the tank with random 3D positions and sizes
     for (let i = 0; i < 10; i++) {
-        const x = random(75, 775); // Random x within the front pane bounds
-        const y = random(150, 650); // Random y within the front pane bounds
-        const z = random(0, 400); // Random depth (0 = front, 1 = back)
+        const x = random(bounds.min.x, bounds.max.x);
+        const y = random(bounds.min.y, bounds.max.y);
+        const z = random(bounds.min.z, bounds.max.z);
         const size = random(20, 30); // Random size for fish
         const fish = new Fish(x, y, z, size);
         tank.addFish(fish);

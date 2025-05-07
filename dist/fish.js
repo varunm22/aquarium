@@ -2,11 +2,16 @@ import { Inhabitant } from './inhabitant.js';
 import { Vector } from './vector.js';
 import { Position } from './factors/position.js';
 import { Initiative } from './factors/initiative.js';
+import { getTankBounds } from './constants.js';
 export class Fish extends Inhabitant {
     constructor(x, y, z, size) {
-        const position = new Position(new Vector(x, y, z), Vector.random(-1, 1));
+        const position = new Position(new Vector(x, y, z), Vector.random(-1, 1), false);
         super(position, size);
         this.initiative = new Initiative(0);
+        // Set in_water based on initial y position relative to tank bounds
+        const bounds = getTankBounds();
+        this.in_water = y >= bounds.min.y;
+        this.position.setShouldConstrain(this.in_water);
     }
     static loadSpritesheet() {
         Fish.spritesheet = loadImage('assets/tetra_small_clear.png');
@@ -65,6 +70,19 @@ export class Fish extends Inhabitant {
         return totalForce;
     }
     update(inhabitants) {
+        if (!this.in_water) {
+            // Apply constant downward acceleration
+            this.position.delta.y += 0.4; // Add to velocity directly
+            // Check if fish has reached the water surface using tank bounds
+            const bounds = getTankBounds();
+            if (this.position.y >= bounds.min.y) {
+                this.in_water = true;
+                this.position.setShouldConstrain(true); // Enable constraints when entering water
+                this.position.delta.y *= 0.5; // slow down when entering water
+            }
+            super.update(inhabitants);
+            return;
+        }
         // React to other fish within the field of view
         const fish_in_view = [];
         const fish_in_proximity = [];
@@ -82,7 +100,7 @@ export class Fish extends Inhabitant {
         const netForce = this.calculateNetForce(fish_in_view, fish_in_proximity);
         const forceMagnitude = netForce.magnitude();
         // Update initiative based on force magnitude
-        this.initiative.delta = forceMagnitude * 2; // Scale force to initiative gain
+        this.initiative.delta = forceMagnitude * 2.5; // Scale force to initiative gain
         this.initiative.update();
         // Check if fish should move based on initiative
         if (Math.random() < this.initiative.value) {
@@ -95,7 +113,7 @@ export class Fish extends Inhabitant {
             // Apply the movement
             this.position.applyAcceleration(direction.multiply(magnitude), 1);
             // Reduce initiative after movement
-            this.initiative.value *= 0.25; // Reduce by 50%
+            this.initiative.value *= 0.20;
         }
         super.update(inhabitants);
     }
@@ -134,7 +152,7 @@ export class Fish extends Inhabitant {
             return { index: 4, mirrored: false }; // back
         return { index: 3, mirrored: false }; // back-left
     }
-    render(tank) {
+    render(tank, color) {
         if (!Fish.spritesheet)
             return;
         // Use the same positioning logic as the Inhabitant class

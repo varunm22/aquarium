@@ -2,6 +2,7 @@ import { Tank } from './tank.js';
 import { Inhabitant } from './inhabitant.js';
 import { Fish } from './fish.js';
 import { UserFish } from './userfish.js';
+import { getTankBounds } from './constants.js';
 
 // Declare p5.js global functions
 declare function fill(r: number, g: number, b: number, a?: number): void;
@@ -78,9 +79,10 @@ export class SidePane {
 
 
     private addNewFish(): void {
-        const x = random(this.tank.x, this.tank.x + this.tank.width);
-        const y = random(this.tank.y, this.tank.y + this.tank.height);
-        const z = random(0, this.tank.depth);
+        const bounds = getTankBounds();
+        const x = random(bounds.min.x, bounds.max.x);
+        const y = -30; // Start above the tank
+        const z = random(bounds.min.z, bounds.max.z);
         const size = random(20, 30);
         this.tank.addFish(new Fish(x, y, z, size));
     }
@@ -250,7 +252,6 @@ export class SidePane {
         
         // Create three rectangles to mask overflow on top, bottom, and right sides
         const headerBottom = this.y + this.headerHeight;
-        console.log(this.y, this.headerHeight, headerBottom, this.y-headerBottom);
         rect(this.x - 10, this.y - 20, this.width + 20, headerBottom - this.y + 20);
         rect(this.x - 10, this.y + this.height, this.width + 20, tank.height + 100);
         rect(this.x + this.width, 0, 500, tank.height + 100);
