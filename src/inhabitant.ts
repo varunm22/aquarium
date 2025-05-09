@@ -26,32 +26,6 @@ export class Inhabitant {
     return this.position.value.distanceTo(other.position.value);
   }
 
-  moveTowards(other: Inhabitant, maxSpeed: number = 1, multiplier: number = 1): void {
-    const direction = other.position.value.subtract(this.position.value);
-    const distance = direction.magnitude();
-    // Normalize direction first, then scale with distance
-    direction.divideInPlace(distance);
-    direction.multiplyInPlace(distance * multiplier);
-    // Cap the force magnitude
-    if (direction.magnitude() > maxSpeed) {
-      direction.multiplyInPlace(maxSpeed / direction.magnitude());
-    }
-    this.position.applyAcceleration(direction, 1);
-  }
-
-  moveFrom(other: Inhabitant, maxSpeed: number = 1, multiplier: number = 1): void {
-    const direction = other.position.value.subtract(this.position.value);
-    const distance = direction.magnitude();
-    // Normalize direction first, then apply inverse square law
-    direction.divideInPlace(distance);
-    direction.multiplyInPlace(-multiplier / (distance * distance));
-    // Cap the force magnitude
-    if (direction.magnitude() > maxSpeed) {
-      direction.multiplyInPlace(maxSpeed / direction.magnitude());
-    }
-    this.position.applyAcceleration(direction, 1);
-  }
-
   isInFieldOfView(other: Inhabitant, maxAngle: number = 45, maxDistance: number = 200): boolean {
     // Direction vector from the current fish to the other
     const disp = other.position.value.subtract(this.position.value);
