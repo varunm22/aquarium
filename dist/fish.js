@@ -76,8 +76,8 @@ export class Fish extends Inhabitant {
         }
         if (fish_in_view.length === 0) {
             // When afraid, higher chance of random movement and larger random vectors
-            const randomThreshold = isAfraid ? 1.0 : 0.25;
-            const randomRange = isAfraid ? 0.5 : 0.01;
+            const randomThreshold = isAfraid ? 0.5 : 0.25;
+            const randomRange = isAfraid ? 3 : 0.01;
             if (Math.random() < randomThreshold) {
                 totalForce.addInPlace(Vector.random(-randomRange, randomRange));
             }
