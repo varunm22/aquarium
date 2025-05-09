@@ -1,7 +1,7 @@
 import { Factor } from './factor.js';
 import { Vector } from '../vector.js';
 export class Fear extends Factor {
-    constructor(value = 0, delta = 0, decayRate = 0.1) {
+    constructor(value = 0, delta = 0, decayRate = 0.005) {
         super(value, delta);
         this.direction = Vector.zero();
         this.decayRate = decayRate;

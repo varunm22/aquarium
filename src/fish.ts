@@ -85,45 +85,53 @@ export class Fish extends Inhabitant {
     }
 
     private calculateNetForce(fish_in_view: Inhabitant[], fish_by_lateral_line: Inhabitant[]): Vector {
-      let totalForce = Vector.zero();
+        let totalForce = Vector.zero();
+        const isAfraid = this.fear.value > 0.5;
 
-      // Handle fish in visual range
-      for (let other of fish_in_view) {
-        if (other.constructor.name === 'UserFish') {
-          // weak attraction to user fish
-          totalForce.addInPlace(this.calculateAttractionForce(other, 0.02, 0.0005));
-        } else {
-          const distance = this.distanceTo(other);
-          if (distance > 150) {
-            // Weak attraction to other fish when far
-            totalForce.addInPlace(this.calculateAttractionForce(other, 0.02, 0.0005));
-          } else if (distance < 150) {
-            // Strong repulsion from other fish when close
-            totalForce.addInPlace(this.calculateRepulsionForce(other, 0.1, 0.1));
-          }
+        // Handle fish in visual range
+        for (let other of fish_in_view) {
+            if (other.constructor.name === 'UserFish') {
+                // weak attraction to user fish
+                totalForce.addInPlace(this.calculateAttractionForce(other, 0.02, 0.0005));
+            } else {
+                const distance = this.distanceTo(other);
+                if (distance > 150) {
+                    // When afraid, stronger attraction to other fish for safety in numbers
+                    const attractionMultiplier = isAfraid ? 0.005 : 0.0005;
+                    const cap = isAfraid ? 0.001 : 0.2;
+                    totalForce.addInPlace(this.calculateAttractionForce(other, cap, attractionMultiplier));
+                } else if (distance < 150) {
+                    // Strong repulsion from other fish when close
+                    totalForce.addInPlace(this.calculateRepulsionForce(other, 0.1, 0.1));
+                }
+            }
         }
-      }
 
-      // Handle fish detected by lateral line or splash
-      for (let other of fish_by_lateral_line) {
-        if (other.constructor.name === 'Fish') {  // Only react to regular Fish
-          // Strong repulsion from fish detected by lateral line or splash
-          totalForce.addInPlace(this.calculateRepulsionForce(other, 0.5, 1));
-          
-          // If we detect a splash, set fear to maximum and point towards the splashing fish
-          if (other instanceof Fish && other.splash) {
-            const direction = other.position.value.subtract(this.position.value);
-            this.fear.increase(1, direction);
-          }
+        // Handle fish detected by lateral line or splash
+        for (let other of fish_by_lateral_line) {
+            if (other.constructor.name === 'Fish') {  // Only react to regular Fish
+                // Strong repulsion from fish detected by lateral line or splash
+                totalForce.addInPlace(this.calculateRepulsionForce(other, 0.5, 1));
+                
+                // If we detect a splash, set fear to maximum and point towards the splashing fish
+                if (other instanceof Fish && other.splash) {
+                    const direction = other.position.value.subtract(this.position.value);
+                    this.fear.increase(1, direction);
+                }
+            }
         }
-      }
 
-      if (fish_in_view.length === 0 && Math.random() < 0.25) {
-        // 2% chance to add random movement when no fish in view
-        totalForce.addInPlace(Vector.random(-0.01, 0.01));
-      }
+        if (fish_in_view.length === 0) {
+            // When afraid, higher chance of random movement and larger random vectors
+            const randomThreshold = isAfraid ? 1.0 : 0.25;
+            const randomRange = isAfraid ? 0.5 : 0.01;
+            
+            if (Math.random() < randomThreshold) {
+                totalForce.addInPlace(Vector.random(-randomRange, randomRange));
+            }
+        }
 
-      return totalForce;
+        return totalForce;
     }
 
     update(inhabitants: Inhabitant[]): void {
@@ -165,7 +173,7 @@ export class Fish extends Inhabitant {
       const forceMagnitude = netForce.magnitude();
 
       // Update initiative based on force magnitude
-      this.initiative.delta = forceMagnitude * 2.5; // Scale force to initiative gain
+      this.initiative.delta = forceMagnitude * 1.5; // Scale force to initiative gain
       this.initiative.update();
 
       // Check if fish should move based on initiative
