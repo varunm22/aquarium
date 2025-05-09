@@ -3,6 +3,7 @@ import { Vector } from './vector.js';
 import { Tank } from './tank.js';
 import { Position } from './factors/position.js';
 import { Initiative } from './factors/initiative.js';
+import { Fear } from './factors/fear.js';
 import { getTankBounds } from './constants.js';
 
 // Declare p5.js global functions
@@ -40,12 +41,16 @@ export class Fish extends Inhabitant {
     ];
 
     private initiative: Initiative;
+    private fear: Fear;
     public in_water: boolean;
+    public splash: boolean;
 
     constructor(x: number, y: number, z: number, size: number) {
       const position = new Position(new Vector(x, y, z), Vector.random(-1, 1), false);
       super(position, size);
       this.initiative = new Initiative(0);
+      this.fear = new Fear(0);
+      this.splash = false;
       
       // Set in_water based on initial y position relative to tank bounds
       const bounds = getTankBounds();
@@ -79,7 +84,7 @@ export class Fish extends Inhabitant {
       return direction;
     }
 
-    private calculateNetForce(fish_in_view: Inhabitant[], fish_in_proximity: Inhabitant[]): Vector {
+    private calculateNetForce(fish_in_view: Inhabitant[], fish_by_lateral_line: Inhabitant[]): Vector {
       let totalForce = Vector.zero();
 
       // Handle fish in visual range
@@ -99,11 +104,17 @@ export class Fish extends Inhabitant {
         }
       }
 
-      // Handle fish in proximity but not in view
-      for (let other of fish_in_proximity) {
+      // Handle fish detected by lateral line or splash
+      for (let other of fish_by_lateral_line) {
         if (other.constructor.name === 'Fish') {  // Only react to regular Fish
-          // Strong repulsion from fish detected by proximity
+          // Strong repulsion from fish detected by lateral line or splash
           totalForce.addInPlace(this.calculateRepulsionForce(other, 0.5, 1));
+          
+          // If we detect a splash, set fear to maximum and point towards the splashing fish
+          if (other instanceof Fish && other.splash) {
+            const direction = other.position.value.subtract(this.position.value);
+            this.fear.increase(1, direction);
+          }
         }
       }
 
@@ -126,27 +137,31 @@ export class Fish extends Inhabitant {
           this.in_water = true;
           this.position.setShouldConstrain(true); // Enable constraints when entering water
           this.position.delta.y *= 0.5 // slow down when entering water
+          this.splash = true; // Set splash to true when entering water
         }
         super.update(inhabitants);
         return;
       }
 
+      // Update fear
+      this.fear.update();
+
       // React to other fish within the field of view
       const fish_in_view: Inhabitant[] = [];
-      const fish_in_proximity: Inhabitant[] = [];
+      const fish_by_lateral_line: Inhabitant[] = [];
       
       for (let other of inhabitants) {
         if (other !== this) {
           if (this.isInFieldOfView(other, 45, 200)) {
             fish_in_view.push(other);
-          } else if (this.distanceTo(other) <= 50) { // Check proximity if not in view
-            fish_in_proximity.push(other);
+          } else if (this.distanceTo(other) <= 50 || (other instanceof Fish && other.splash)) { // Check lateral line or splash
+            fish_by_lateral_line.push(other);
           }
         }
       }
 
       // Calculate net force
-      const netForce = this.calculateNetForce(fish_in_view, fish_in_proximity);
+      const netForce = this.calculateNetForce(fish_in_view, fish_by_lateral_line);
       const forceMagnitude = netForce.magnitude();
 
       // Update initiative based on force magnitude
@@ -169,6 +184,9 @@ export class Fish extends Inhabitant {
         // Reduce initiative after movement
         this.initiative.value *= 0.20;
       }
+
+      // Reset splash flag after one frame
+      this.splash = false;
 
       super.update(inhabitants);
     }
