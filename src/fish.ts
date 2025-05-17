@@ -118,16 +118,15 @@ export class Fish extends Inhabitant {
                 if (other instanceof Fish && other.splash) {
                     const direction = other.position.value.subtract(this.position.value);
                     const distance = direction.magnitude();
-                    
+
                     const baseDistance = 200;
                     const splashIntensity = Math.min(1, baseDistance / distance);
-                    
+
                     // Create a direction vector that points to a point above the splash
                     const splashLocation = other.position.value.add(new Vector(0, 200, 0));
                     const fearDirection = splashLocation.subtract(this.position.value);
-                    
+
                     this.fear.increase(splashIntensity, fearDirection);
-                    console.log(splashIntensity);
                 }
             }
         }
@@ -197,8 +196,8 @@ export class Fish extends Inhabitant {
       this.initiative.delta = forceMagnitude * 1.5; // Scale force to initiative gain
       this.initiative.update();
 
-      // Check if fish should move based on initiative
-      if (Math.random() < this.initiative.value) {
+      // Calculate movement probability and magnitude based on initiative
+      if (Math.random() < Math.min(0.25, this.initiative.value)) {
         // Normalize the force vector for direction
         const direction = netForce.divide(forceMagnitude || 1);
         
@@ -210,8 +209,7 @@ export class Fish extends Inhabitant {
         // Apply the movement
         this.position.applyAcceleration(direction.multiply(magnitude), 1);
         
-        // Reduce initiative after movement
-        this.initiative.value *= 0.20;
+        this.initiative.value *= 0.2;
       }
 
       // Reset splash flag after one frame
