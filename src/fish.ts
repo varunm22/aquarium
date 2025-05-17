@@ -87,6 +87,7 @@ export class Fish extends Inhabitant {
     private calculateNetForce(fish_in_view: Inhabitant[], fish_by_lateral_line: Inhabitant[]): Vector {
         let totalForce = Vector.zero();
         const isAfraid = this.fear.value > 0.5;
+        const isVeryAfraid = this.fear.value > 0.7;
 
         // Handle fish in visual range
         for (let other of fish_in_view) {
@@ -113,10 +114,20 @@ export class Fish extends Inhabitant {
                 // Strong repulsion from fish detected by lateral line or splash
                 totalForce.addInPlace(this.calculateRepulsionForce(other, 0.5, 1));
                 
-                // If we detect a splash, set fear to maximum and point towards the splashing fish
+                // If we detect a splash, set fear based on distance
                 if (other instanceof Fish && other.splash) {
                     const direction = other.position.value.subtract(this.position.value);
-                    this.fear.increase(1, direction);
+                    const distance = direction.magnitude();
+                    
+                    const baseDistance = 200;
+                    const splashIntensity = Math.min(1, baseDistance / distance);
+                    
+                    // Create a direction vector that points to a point above the splash
+                    const splashLocation = other.position.value.add(new Vector(0, 200, 0));
+                    const fearDirection = splashLocation.subtract(this.position.value);
+                    
+                    this.fear.increase(splashIntensity, fearDirection);
+                    console.log(splashIntensity);
                 }
             }
         }
@@ -128,6 +139,16 @@ export class Fish extends Inhabitant {
             
             if (Math.random() < randomThreshold) {
                 totalForce.addInPlace(Vector.random(-randomRange, randomRange));
+            }
+        }
+
+        // When very afraid, add strong force away from fear direction
+        if (isVeryAfraid) {
+            const fearDirection = this.fear.getDirection();
+            if (fearDirection.magnitude() > 0) {
+                // Strong repulsion away from fear direction
+                const escapeForce = fearDirection.multiply(-0.2);
+                totalForce.addInPlace(escapeForce);
             }
         }
 
