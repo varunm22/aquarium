@@ -1,7 +1,7 @@
 import { Inhabitant } from './inhabitant.js';
-import { Vector } from './vector.js';
-import { Tank } from './tank.js';
-import { Position } from './factors/position.js';
+import { Vector } from '../vector.js';
+import { Tank } from '../tank.js';
+import { Position } from '../factors/position.js';
 
 // Declare p5.js global functions
 declare function color(r: number, g: number, b: number): p5.Color;

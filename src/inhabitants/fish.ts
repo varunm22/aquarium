@@ -1,10 +1,10 @@
 import { Inhabitant } from './inhabitant.js';
-import { Vector } from './vector.js';
-import { Tank } from './tank.js';
-import { Position } from './factors/position.js';
-import { Initiative } from './factors/initiative.js';
-import { Fear } from './factors/fear.js';
-import { getTankBounds } from './constants.js';
+import { Vector } from '../vector.js';
+import { Tank } from '../tank.js';
+import { Position } from '../factors/position.js';
+import { Initiative } from '../factors/initiative.js';
+import { Fear } from '../factors/fear.js';
+import { getTankBounds } from '../constants.js';
 
 // Declare p5.js global functions
 declare function image(img: p5.Image, x: number, y: number, w: number, h: number, sx: number, sy: number, sw: number, sh: number): void;

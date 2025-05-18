@@ -1,6 +1,6 @@
 import { Inhabitant } from './inhabitant.js';
-import { Vector } from './vector.js';
-import { Position } from './factors/position.js';
+import { Vector } from '../vector.js';
+import { Position } from '../factors/position.js';
 export class UserFish extends Inhabitant {
     constructor(x, y, z, size) {
         const position = new Position(new Vector(x, y, z), Vector.zero());

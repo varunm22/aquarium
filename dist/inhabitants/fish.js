@@ -1,9 +1,9 @@
 import { Inhabitant } from './inhabitant.js';
-import { Vector } from './vector.js';
-import { Position } from './factors/position.js';
-import { Initiative } from './factors/initiative.js';
-import { Fear } from './factors/fear.js';
-import { getTankBounds } from './constants.js';
+import { Vector } from '../vector.js';
+import { Position } from '../factors/position.js';
+import { Initiative } from '../factors/initiative.js';
+import { Fear } from '../factors/fear.js';
+import { getTankBounds } from '../constants.js';
 export class Fish extends Inhabitant {
     constructor(x, y, z, size) {
         const position = new Position(new Vector(x, y, z), Vector.random(-1, 1), false);

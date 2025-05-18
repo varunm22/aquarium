@@ -1,7 +1,7 @@
 import { Tank } from './tank.js';
-import { Inhabitant } from './inhabitant.js';
-import { Fish } from './fish.js';
-import { UserFish } from './userfish.js';
+import { Inhabitant } from './inhabitants/inhabitant.js';
+import { Fish } from './inhabitants/fish.js';
+import { UserFish } from './inhabitants/userfish.js';
 import { getTankBounds } from './constants.js';
 
 // Declare p5.js global functions

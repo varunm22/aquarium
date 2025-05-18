@@ -1,6 +1,6 @@
 import { Tank } from './tank.js';
-import { Fish } from './fish.js';
-import { UserFish } from './userfish.js';
+import { Fish } from './inhabitants/fish.js';
+import { UserFish } from './inhabitants/userfish.js';
 import { SidePane } from './sidepane.js';
 import { getTankBounds } from './constants.js';
 let tank;

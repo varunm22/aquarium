@@ -1,5 +1,5 @@
-import { Tank } from './tank.js';
-import { Position } from './factors/position.js';
+import { Tank } from '../tank.js';
+import { Position } from '../factors/position.js';
 
 // Declare p5.js global functions
 declare function degrees(radians: number): number;

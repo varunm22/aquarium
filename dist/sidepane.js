@@ -1,5 +1,5 @@
-import { Fish } from './fish.js';
-import { UserFish } from './userfish.js';
+import { Fish } from './inhabitants/fish.js';
+import { UserFish } from './inhabitants/userfish.js';
 import { getTankBounds } from './constants.js';
 // p5.js constants
 const CENTER = 'center';

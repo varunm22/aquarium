@@ -1,6 +1,9 @@
-import { Inhabitant } from './inhabitant.js';
+import { Inhabitant } from './inhabitants/inhabitant.js';
 import { TANK_CONSTANTS } from './constants.js';
-import { Fish } from './fish.js';
+import { Fish } from './inhabitants/fish.js';
+import { Microfauna } from './inhabitants/microfauna.js';
+import { Position } from './factors/position.js';
+import { Vector } from './vector.js';
 
 // Declare p5.js global functions
 declare function color(r: number, g: number, b: number, a?: number): p5.Color;
@@ -48,6 +51,7 @@ export class Tank {
     gravelBottom: HTMLImageElement | null; // Reference to the gravel texture image for bottom
     gravelFront: HTMLImageElement | null; // Reference to the gravel texture image for front
     gravelHeight: number;
+    microfauna: Inhabitant[]; // Array to store microfauna objects
 
     constructor(x: number, y: number, width: number, height: number, depth: number) {
         // Use constants for initialization
@@ -73,10 +77,26 @@ export class Tank {
         this.gravelBottom = loadImage('assets/gravel-transform.png');
         this.gravelFront = loadImage('assets/gravel-front.png');
         this.gravelHeight = TANK_CONSTANTS.GRAVEL_HEIGHT;
+        this.microfauna = [];
+        
+        // Initialize 10 microfauna in random positions in bottom 100 pixels
+        for (let i = 0; i < 10; i++) {
+            const x = Math.random() * this.width + this.x;
+            const y = Math.random() * 100 + (this.waterLevelBottom - 100); // Random position in bottom 100 pixels
+            const z = Math.random() * this.depth;
+            const position = new Position(new Vector(x, y, z), new Vector(0, 0, 0));
+            const microfauna = new Microfauna(position);
+            microfauna.setTank(this);
+            this.microfauna.push(microfauna);
+        }
     }
   
     addFish(fish: Inhabitant): void {
       this.fish.push(fish);
+    }
+
+    addMicrofauna(microfauna: Inhabitant): void {
+      this.microfauna.push(microfauna);
     }
   
     update(): void {
@@ -84,11 +104,17 @@ export class Tank {
       for (let fish of this.fish) {
         fish.update(this.fish);
       }
+      // Update all microfauna
+      for (let micro of this.microfauna) {
+        micro.update(this.microfauna);
+      }
     }
 
     render(): void {
       // Sort fish by depth (further fish first)
       this.fish.sort((a, b) => b.position.z - a.position.z);
+      // Sort microfauna by depth
+      this.microfauna.sort((a, b) => b.position.z - a.position.z);
     
       // Render back pane (before any water layers)
       this.renderBack();
@@ -96,11 +122,14 @@ export class Tank {
       // Render gravel
       this.renderGravel();
 
+      // Combine fish and microfauna for rendering
+      const allInhabitants = [...this.fish, ...this.microfauna];
+      allInhabitants.sort((a, b) => b.position.z - a.position.z);
    
-      // Render fish behind the first water layer (z > this.depth, at the absolute back)
-      for (let fish of this.fish) {
-        if (fish.position.z >= this.depth) {
-          fish.render(this);
+      // Render inhabitants behind the first water layer (z > this.depth, at the absolute back)
+      for (let inhabitant of allInhabitants) {
+        if (inhabitant.position.z >= this.depth) {
+          inhabitant.render(this, color(0, 0, 0));
         }
       }
     
@@ -112,10 +141,10 @@ export class Tank {
         const layerZStart = interp * this.depth;
         const layerZEnd = nextInterp * this.depth;
     
-        // Render fish that fall within this layer
-        for (let fish of this.fish) {
-          if (fish.position.z >= layerZStart && fish.position.z < layerZEnd) {
-            fish.render(this);
+        // Render inhabitants that fall within this layer
+        for (let inhabitant of allInhabitants) {
+          if (inhabitant.position.z >= layerZStart && inhabitant.position.z < layerZEnd) {
+            inhabitant.render(this, color(0, 0, 0));
           }
         }
     
@@ -131,14 +160,14 @@ export class Tank {
         rect(layerX, layerYTop, layerWidth, layerHeight);
       }
     
-      // Render fish in front of the last water layer (z < 0, at the absolute front)
-      for (let fish of this.fish) {
-        if (fish.position.z < 0) {
-          fish.render(this, color(173, 216, 230));
+      // Render inhabitants in front of the last water layer (z < 0, at the absolute front)
+      for (let inhabitant of allInhabitants) {
+        if (inhabitant.position.z < 0) {
+          inhabitant.render(this, color(173, 216, 230));
         }
       }
     
-      // Render front pane (after all water layers and fish)
+      // Render front pane (after all water layers and inhabitants)
       this.renderFront();
     }
       
