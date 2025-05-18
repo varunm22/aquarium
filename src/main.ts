@@ -1,5 +1,5 @@
 import { Tank } from './tank.js';
-import { Fish } from './inhabitants/fish.js';
+import { EmberTetra } from './inhabitants/embertetra.js';
 import { UserFish } from './inhabitants/userfish.js';
 import { SidePane } from './sidepane.js';
 import { getTankBounds } from './constants.js';
@@ -22,7 +22,7 @@ function setup(): void {
   sidePane = new SidePane(tank);
 
   // Load the fish spritesheet
-  Fish.loadSpritesheet();
+  EmberTetra.loadSpritesheet();
 
   // Get tank bounds for proper fish placement
   const bounds = getTankBounds();
@@ -33,7 +33,7 @@ function setup(): void {
     const y = random(bounds.min.y, bounds.max.y);
     const z = random(bounds.min.z, bounds.max.z);
     const size = random(20, 30); // Random size for fish
-    const fish = new Fish(x, y, z, size);
+    const fish = new EmberTetra(x, y, z, size);
     tank.addFish(fish);
   }
 

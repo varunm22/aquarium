@@ -4,18 +4,12 @@ import { Tank } from '../tank.js';
 import { Position } from '../factors/position.js';
 import { Initiative } from '../factors/initiative.js';
 import { Fear } from '../factors/fear.js';
+import { Hunger } from '../factors/hunger.js';
 import { getTankBounds } from '../constants.js';
+import * as behavior from './behavior.js';
 
 // Declare p5.js global functions
-declare function image(img: p5.Image, x: number, y: number, w: number, h: number, sx: number, sy: number, sw: number, sh: number): void;
 declare function loadImage(path: string): p5.Image;
-declare function lerp(start: number, stop: number, amt: number): number;
-declare function push(): void;
-declare function pop(): void;
-declare function translate(x: number, y: number): void;
-declare function rotate(angle: number): void;
-declare function scale(x: number, y: number): void;
-
 
 // Declare p5.Color type
 declare namespace p5 {
@@ -30,7 +24,7 @@ interface SpriteConfig {
   height: number;  // height of sprite
 }
 
-export class Fish extends Inhabitant {
+export abstract class Fish extends Inhabitant {
     static spritesheet: p5.Image | null = null;
     static readonly SPRITE_CONFIGS: SpriteConfig[] = [
         { x: 3, y: 54, width: 34, height: 41 },  // front
@@ -40,267 +34,146 @@ export class Fish extends Inhabitant {
         { x: 44, y: 54, width: 26, height: 41 } // back
     ];
 
-    private initiative: Initiative;
-    private fear: Fear;
+    protected initiative: Initiative;
+    protected fear: Fear;
+    protected hunger: Hunger;
     public in_water: boolean;
     public splash: boolean;
 
-    constructor(x: number, y: number, z: number, size: number) {
-      const position = new Position(new Vector(x, y, z), Vector.random(-1, 1), false);
-      super(position, size);
-      this.initiative = new Initiative(0);
-      this.fear = new Fear(0);
-      this.splash = false;
-      
-      // Set in_water based on initial y position relative to tank bounds
-      const bounds = getTankBounds();
-      this.in_water = y >= bounds.min.y;
-      this.position.setShouldConstrain(this.in_water);
+    constructor(position: Position, size: number) {
+        super(position, size);
+        this.initiative = new Initiative(0);
+        this.fear = new Fear(0);
+        this.hunger = new Hunger(0);
+        this.splash = false;
+        
+        // Set in_water based on initial y position relative to tank bounds
+        const bounds = getTankBounds();
+        this.in_water = position.y >= bounds.min.y;
+        this.position.setShouldConstrain(this.in_water);
     }
 
     static loadSpritesheet(): void {
       Fish.spritesheet = loadImage('assets/tetra_small_clear.png');
     }
 
-    private calculateAttractionForce(other: Inhabitant, maxSpeed: number, multiplier: number): Vector {
-      const direction = other.position.value.subtract(this.position.value);
-      const distance = direction.magnitude();
-      direction.divideInPlace(distance);
-      direction.multiplyInPlace(distance * multiplier);
-      if (direction.magnitude() > maxSpeed) {
-        direction.multiplyInPlace(maxSpeed / direction.magnitude());
-      }
-      return direction;
+    // Public methods for behavior functions
+    public updateFear(): void {
+        this.fear.update();
     }
 
-    private calculateRepulsionForce(other: Inhabitant, maxSpeed: number, multiplier: number): Vector {
-      const direction = other.position.value.subtract(this.position.value);
-      const distance = direction.magnitude();
-      direction.divideInPlace(distance);
-      direction.multiplyInPlace(-multiplier / (distance * distance));
-      if (direction.magnitude() > maxSpeed) {
-        direction.multiplyInPlace(maxSpeed / direction.magnitude());
-      }
-      return direction;
+    public updateHunger(): void {
+        this.hunger.update();
     }
 
-    private calculateNetForce(fish_in_view: Inhabitant[], fish_by_lateral_line: Inhabitant[]): Vector {
-        let totalForce = Vector.zero();
-        const isAfraid = this.fear.value > 0.5;
-        const isVeryAfraid = this.fear.value > 0.7;
+    public updateInitiative(delta: number): void {
+        this.initiative.delta = delta;
+        this.initiative.update();
+    }
 
-        // Handle fish in visual range
-        for (let other of fish_in_view) {
-            if (other.constructor.name === 'UserFish') {
-                // weak attraction to user fish
-                totalForce.addInPlace(this.calculateAttractionForce(other, 0.02, 0.0005));
-            } else {
-                const distance = this.distanceTo(other);
-                if (distance > 150) {
-                    // When afraid, stronger attraction to other fish for safety in numbers
-                    const attractionMultiplier = isAfraid ? 0.005 : 0.0005;
-                    const cap = isAfraid ? 0.001 : 0.2;
-                    totalForce.addInPlace(this.calculateAttractionForce(other, cap, attractionMultiplier));
-                } else if (distance < 150) {
-                    // Strong repulsion from other fish when close
-                    totalForce.addInPlace(this.calculateRepulsionForce(other, 0.1, 0.1));
-                }
-            }
+    public getInitiativeValue(): number {
+        return this.initiative.value;
+    }
+
+    public setInitiativeValue(value: number): void {
+        this.initiative.value = value;
+    }
+
+    // Public methods for force calculations
+    public calculateAttractionForce(other: Inhabitant, maxSpeed: number, multiplier: number): Vector {
+        const direction = other.position.value.subtract(this.position.value);
+        const distance = direction.magnitude();
+        direction.divideInPlace(distance);
+        direction.multiplyInPlace(distance * multiplier);
+        if (direction.magnitude() > maxSpeed) {
+            direction.multiplyInPlace(maxSpeed / direction.magnitude());
         }
+        return direction;
+    }
 
-        // Handle fish detected by lateral line or splash
-        for (let other of fish_by_lateral_line) {
-            if (other.constructor.name === 'Fish') {  // Only react to regular Fish
-                // Strong repulsion from fish detected by lateral line or splash
-                totalForce.addInPlace(this.calculateRepulsionForce(other, 0.5, 1));
-                
-                // If we detect a splash, set fear based on distance
-                if (other instanceof Fish && other.splash) {
-                    const direction = other.position.value.subtract(this.position.value);
-                    const distance = direction.magnitude();
-
-                    const baseDistance = 200;
-                    const splashIntensity = Math.min(1, baseDistance / distance);
-
-                    // Create a direction vector that points to a point above the splash
-                    const splashLocation = other.position.value.add(new Vector(0, 200, 0));
-                    const fearDirection = splashLocation.subtract(this.position.value);
-
-                    this.fear.increase(splashIntensity, fearDirection);
-                }
-            }
+    public calculateRepulsionForce(other: Inhabitant, maxSpeed: number, multiplier: number): Vector {
+        const direction = other.position.value.subtract(this.position.value);
+        const distance = direction.magnitude();
+        direction.divideInPlace(distance);
+        direction.multiplyInPlace(-multiplier / (distance * distance));
+        if (direction.magnitude() > maxSpeed) {
+            direction.multiplyInPlace(maxSpeed / direction.magnitude());
         }
+        return direction;
+    }
 
-        if (fish_in_view.length === 0) {
-            // When afraid, higher chance of random movement and larger random vectors
-            const randomThreshold = isAfraid ? 0.5 : 0.25;
-            const randomRange = isAfraid ? 3 : 0.01;
-            
-            if (Math.random() < randomThreshold) {
-                totalForce.addInPlace(Vector.random(-randomRange, randomRange));
-            }
-        }
+    // Public methods for fear
+    public getFearDirection(): Vector {
+        return this.fear.getDirection();
+    }
 
-        // When very afraid, add strong force away from fear direction
-        if (isVeryAfraid) {
-            const fearDirection = this.fear.getDirection();
-            if (fearDirection.magnitude() > 0) {
-                // Strong repulsion away from fear direction
-                const escapeForce = fearDirection.multiply(-0.2);
-                totalForce.addInPlace(escapeForce);
-            }
-        }
+    public getFearValue(): number {
+        return this.fear.value;
+    }
 
-        return totalForce;
+    public increaseFear(amount: number, direction?: Vector): void {
+        this.fear.increase(amount, direction);
     }
 
     update(inhabitants: Inhabitant[]): void {
-      if (!this.in_water) {
-        // Apply constant downward acceleration
-        this.position.delta.y += 0.4; // Add to velocity directly
-        
-        // Check if fish has reached the water surface using tank bounds
-        const bounds = getTankBounds();
-        if (this.position.y >= bounds.min.y) {
-          this.in_water = true;
-          this.position.setShouldConstrain(true); // Enable constraints when entering water
-          this.position.delta.y *= 0.5 // slow down when entering water
-          this.splash = true; // Set splash to true when entering water
+        if (!this.in_water) {
+            if (!behavior.handleNotInWater(this)) {
+                super.update(inhabitants);
+                return;
+            }
         }
+
+        // Update factors
+        behavior.updateFactors(this);
+
+        // Scan environment
+        const { fish_in_view, fish_by_lateral_line, microfauna_in_view } = behavior.scanEnvironment(this, inhabitants);
+
+        // Handle movement based on fear level
+        if (this.fear.value > 0.5) {
+            behavior.handleFearMovement(this, fish_in_view, fish_by_lateral_line);
+        } else {
+            behavior.handleNormalMovement(this, fish_in_view, fish_by_lateral_line);
+        }
+
+        // Reset splash flag after one frame
+        this.splash = false;
+
         super.update(inhabitants);
-        return;
-      }
+    }
 
-      // Update fear
-      this.fear.update();
-
-      // React to other fish within the field of view
-      const fish_in_view: Inhabitant[] = [];
-      const fish_by_lateral_line: Inhabitant[] = [];
-      
-      for (let other of inhabitants) {
-        if (other !== this) {
-          if (this.isInFieldOfView(other, 45, 200)) {
-            fish_in_view.push(other);
-          } else if (this.distanceTo(other) <= 50 || (other instanceof Fish && other.splash)) { // Check lateral line or splash
-            fish_by_lateral_line.push(other);
-          }
-        }
-      }
-
-      // Calculate net force
-      const netForce = this.calculateNetForce(fish_in_view, fish_by_lateral_line);
-      const forceMagnitude = netForce.magnitude();
-
-      // Update initiative based on force magnitude
-      this.initiative.delta = forceMagnitude * 1.5; // Scale force to initiative gain
-      this.initiative.update();
-
-      // Calculate movement probability and magnitude based on initiative
-      if (Math.random() < Math.min(0.25, this.initiative.value)) {
-        // Normalize the force vector for direction
-        const direction = netForce.divide(forceMagnitude || 1);
+    protected getVerticalTilt(): number {
+        const delta = this.position.delta;
+        if (delta.x === 0) return 0;
         
-        // Calculate movement magnitude with some variance
-        const baseMagnitude = this.initiative.value;
-        const variance = 0.2; // 20% variance
-        const magnitude = baseMagnitude * (1 + (Math.random() - 0.5) * variance);
+        // Calculate angle between horizontal movement and vertical movement
+        // adding 2 so that tilt is minimal when facing forward or back
+        const angle = Math.atan2(delta.y, Math.abs(delta.x) + 2);
+        // Negate the angle if moving left (negative x)
+        return delta.x < 0 ? -angle : angle;
+    }
+
+    protected getSpriteIndex(): { index: number; mirrored: boolean } {
+        const delta = this.position.delta;
+        const x = delta.x;
+        const z = delta.z;
         
-        // Apply the movement
-        this.position.applyAcceleration(direction.multiply(magnitude), 1);
+        // Calculate angle in radians
+        const angle = Math.atan2(z, x);
+        // Convert to degrees and normalize to 0-360
+        const degrees = (angle * 180 / Math.PI + 180) % 360;
         
-        this.initiative.value *= 0.2;
-      }
-
-      // Reset splash flag after one frame
-      this.splash = false;
-
-      super.update(inhabitants);
+        // Map to octants
+        if (degrees >= 337.5 || degrees < 22.5) return { index: 2, mirrored: false }; // left
+        if (degrees >= 22.5 && degrees < 67.5) return { index: 1, mirrored: false }; // front-left
+        if (degrees >= 67.5 && degrees < 112.5) return { index: 0, mirrored: false }; // front
+        if (degrees >= 112.5 && degrees < 157.5) return { index: 1, mirrored: true }; // front-right
+        if (degrees >= 157.5 && degrees < 202.5) return { index: 2, mirrored: true }; // right
+        if (degrees >= 202.5 && degrees < 247.5) return { index: 3, mirrored: true }; // back-right
+        if (degrees >= 247.5 && degrees < 292.5) return { index: 4, mirrored: false }; // back
+        return { index: 3, mirrored: false }; // back-left
     }
 
-    private getVerticalTilt(): number {
-      const delta = this.position.delta;
-      if (delta.x === 0) return 0;
-      
-      // Calculate angle between horizontal movement and vertical movement
-      // adding 2 so that tilt is minimal when facing forward or back
-      const angle = Math.atan2(delta.y, Math.abs(delta.x) + 2);
-      // Negate the angle if moving left (negative x)
-      return delta.x < 0 ? -angle : angle;
-    }
-
-    getSpriteIndex(): { index: number; mirrored: boolean } {
-      const delta = this.position.delta;
-      const x = delta.x;
-      const z = delta.z;
-      
-      // Calculate angle in radians
-      const angle = Math.atan2(z, x);
-      // Convert to degrees and normalize to 0-360
-      const degrees = (angle * 180 / Math.PI + 180) % 360;
-      
-      // Map to octants
-      if (degrees >= 337.5 || degrees < 22.5) return { index: 2, mirrored: false }; // left
-      if (degrees >= 22.5 && degrees < 67.5) return { index: 1, mirrored: false }; // front-left
-      if (degrees >= 67.5 && degrees < 112.5) return { index: 0, mirrored: false }; // front
-      if (degrees >= 112.5 && degrees < 157.5) return { index: 1, mirrored: true }; // front-right
-      if (degrees >= 157.5 && degrees < 202.5) return { index: 2, mirrored: true }; // right
-      if (degrees >= 202.5 && degrees < 247.5) return { index: 3, mirrored: true }; // back-right
-      if (degrees >= 247.5 && degrees < 292.5) return { index: 4, mirrored: false }; // back
-      return { index: 3, mirrored: false }; // back-left
-    }
-
-    render(tank: Tank, color?: p5.Color): void {
-      if (!Fish.spritesheet) return;
-    
-      // Use the same positioning logic as the Inhabitant class
-      const relativeDepth = this.position.z / tank.depth;
-      const renderX = lerp(tank.x, tank.backX, relativeDepth) + (this.position.x - tank.x) * lerp(1, 0.7, relativeDepth);
-      const renderY = lerp(tank.y, tank.backY, relativeDepth) + (this.position.y - tank.y) * lerp(1, 0.7, relativeDepth);
-    
-      // Scale size based on depth
-      const depthScale = lerp(1, 0.7, relativeDepth);
-      const { index, mirrored } = this.getSpriteIndex();
-      const spriteConfig = Fish.SPRITE_CONFIGS[index];
-      
-      // Use height as the consistent scaling factor
-      const MAX_SPRITE_HEIGHT = 41; // Height of the tallest sprite
-      
-      // Calculate scale based on the fish's size and the max sprite height
-      const scale_size = (this.size * depthScale) / MAX_SPRITE_HEIGHT;
-      const spriteWidth = spriteConfig.width * scale_size;
-      const spriteHeight = spriteConfig.height * scale_size;
-      
-      // Get the tilt angle
-      const tilt = this.getVerticalTilt();
-      
-      // Save current transformation state and start with a clean slate
-      push();
-      
-      // Apply transformations in this specific order:
-      translate(renderX, renderY); // 1. Move to position
-      rotate(tilt);                // 2. Apply rotation
-      
-      // 3. Apply mirroring if needed
-      if (mirrored) {
-        scale(-1, 1);
-      }
-      
-      // Draw the sprite centered at origin (which is now at the fish's position)
-      image(
-        Fish.spritesheet,
-        -spriteWidth/2,
-        -spriteHeight/2,
-        spriteWidth,
-        spriteHeight,
-        spriteConfig.x,
-        spriteConfig.y,
-        spriteConfig.width,
-        spriteConfig.height
-      );
-      
-      // Restore the original transformation state
-      pop();
-    }
+    abstract render(tank: Tank, color?: p5.Color): void;
 }
   

@@ -1,4 +1,4 @@
-import { Fish } from './inhabitants/fish.js';
+import { EmberTetra } from './inhabitants/embertetra.js';
 import { UserFish } from './inhabitants/userfish.js';
 import { getTankBounds } from './constants.js';
 // p5.js constants
@@ -42,7 +42,7 @@ export class SidePane {
         const y = -30; // Start above the tank
         const z = random(bounds.min.z, bounds.max.z);
         const size = random(20, 30);
-        this.tank.addFish(new Fish(x, y, z, size));
+        this.tank.addFish(new EmberTetra(x, y, z, size));
     }
     renderFooter() {
         const footerY = this.y + this.height - this.footerHeight;
@@ -149,7 +149,7 @@ export class SidePane {
     }
     renderFishView(tank) {
         // Calculate max scroll based on number of fish and visible rows
-        const regularFish = tank.fish.filter(fish => fish instanceof Fish && !(fish instanceof UserFish));
+        const regularFish = tank.fish.filter(fish => fish instanceof EmberTetra && !(fish instanceof UserFish));
         const totalHeight = regularFish.length * this.rowHeight;
         const visibleRows = Math.floor((this.height - this.headerHeight - this.footerHeight) / this.rowHeight);
         this.maxScroll = Math.max(0, totalHeight - visibleRows * this.rowHeight);
@@ -193,12 +193,12 @@ export class SidePane {
     }
     renderFishInfo(fish, y) {
         // Draw fish sprite
-        if (fish instanceof Fish && Fish.spritesheet) {
+        if (fish instanceof EmberTetra && EmberTetra.spritesheet) {
             // Get the same sprite index as the fish's current orientation
-            const { index, mirrored } = fish.getSpriteIndex();
+            const { index, mirrored } = fish.getSpriteInfo();
             // Ensure index is within bounds
-            if (index >= 0 && index < Fish.SPRITE_CONFIGS.length) {
-                const spriteConfig = Fish.SPRITE_CONFIGS[index];
+            if (index >= 0 && index < EmberTetra.SPRITE_CONFIGS.length) {
+                const spriteConfig = EmberTetra.SPRITE_CONFIGS[index];
                 const scale = 0.5; // Scale down the sprite
                 const spriteWidth = spriteConfig.width * scale;
                 const spriteHeight = spriteConfig.height * scale;
@@ -206,7 +206,7 @@ export class SidePane {
                 const spriteX = this.x + this.padding;
                 const spriteY = y + (this.rowHeight - spriteHeight) / 2;
                 // Draw the sprite
-                image(Fish.spritesheet, mirrored ? spriteX + spriteWidth : spriteX, // Flip x position if mirrored
+                image(EmberTetra.spritesheet, mirrored ? spriteX + spriteWidth : spriteX, // Flip x position if mirrored
                 spriteY, mirrored ? -spriteWidth : spriteWidth, // Flip width if mirrored
                 spriteHeight, spriteConfig.x, spriteConfig.y, spriteConfig.width, spriteConfig.height);
             }

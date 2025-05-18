@@ -1,6 +1,6 @@
 import { Inhabitant } from './inhabitants/inhabitant.js';
 import { TANK_CONSTANTS } from './constants.js';
-import { Fish } from './inhabitants/fish.js';
+import { EmberTetra } from './inhabitants/embertetra.js';
 import { Microfauna } from './inhabitants/microfauna.js';
 import { Position } from './factors/position.js';
 import { Vector } from './vector.js';
@@ -92,7 +92,7 @@ export class Tank {
     }
   
     addFish(fish: Inhabitant): void {
-      this.fish.push(fish);
+        this.fish.push(fish);
     }
 
     addMicrofauna(microfauna: Inhabitant): void {
