@@ -4,10 +4,10 @@ import { Vector } from '../vector.js';
 import { Tank } from '../tank.js';
 
 export class Microfauna extends Inhabitant {
-    private tank: Tank | null = null;
+    public tank: Tank | null = null;
     private static readonly MAX_NEARBY = 20;
     private static readonly MAX_DISTANCE = 100;
-    private static readonly BASE_REPRODUCTION_CHANCE = 0.01;
+    private static readonly BASE_REPRODUCTION_CHANCE = 0.005;
 
     constructor(position: Position) {
         super(position, 2);

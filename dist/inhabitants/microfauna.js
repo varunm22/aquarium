@@ -52,4 +52,4 @@ export class Microfauna extends Inhabitant {
 }
 Microfauna.MAX_NEARBY = 20;
 Microfauna.MAX_DISTANCE = 100;
-Microfauna.BASE_REPRODUCTION_CHANCE = 0.01;
+Microfauna.BASE_REPRODUCTION_CHANCE = 0.005;

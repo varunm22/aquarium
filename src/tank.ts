@@ -1,6 +1,5 @@
 import { Inhabitant } from './inhabitants/inhabitant.js';
 import { TANK_CONSTANTS } from './constants.js';
-import { EmberTetra } from './inhabitants/embertetra.js';
 import { Microfauna } from './inhabitants/microfauna.js';
 import { Position } from './factors/position.js';
 import { Vector } from './vector.js';
@@ -100,13 +99,16 @@ export class Tank {
     }
   
     update(): void {
+      // Combine all inhabitants for updates
+      const allInhabitants = [...this.fish, ...this.microfauna];
+      
       // Update all fish in the tank
       for (let fish of this.fish) {
-        fish.update(this.fish);
+        fish.update(allInhabitants);
       }
       // Update all microfauna
       for (let micro of this.microfauna) {
-        micro.update(this.microfauna);
+        micro.update(allInhabitants);
       }
     }
 

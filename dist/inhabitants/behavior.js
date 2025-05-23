@@ -1,4 +1,5 @@
 import { Fish } from './fish.js';
+import { Microfauna } from './microfauna.js';
 import { Vector } from '../vector.js';
 import { getTankBounds } from '../constants.js';
 /**
@@ -35,7 +36,7 @@ export function scanEnvironment(fish, inhabitants) {
     for (let other of inhabitants) {
         if (other !== fish) {
             if (other instanceof Fish) { // Handle fish
-                if (fish.isInFieldOfView(other, 45, 200)) {
+                if (fish.isInFieldOfView(other, 45, 300)) {
                     fish_in_view.push(other);
                 }
                 else if (fish.distanceTo(other) <= 50 || (other instanceof Fish && other.splash)) { // Check lateral line or splash
@@ -43,7 +44,7 @@ export function scanEnvironment(fish, inhabitants) {
                 }
             }
             else if (other.constructor.name === 'Microfauna') { // Handle microfauna
-                if (fish.isInFieldOfView(other, 45, 200)) {
+                if (fish.isInFieldOfView(other, 45, 300)) {
                     microfauna_in_view.push(other);
                 }
             }
@@ -158,6 +159,81 @@ export function handleFearMovement(fish, fish_in_view, fish_by_lateral_line) {
     const netForce = calculateFearNetForce(fish, fish_in_view, fish_by_lateral_line);
     const forceMagnitude = netForce.magnitude();
     applyMovement(fish, netForce, forceMagnitude);
+}
+/**
+ * Handles movement for a fish in hunger mode
+ */
+export function handleHungerMovement(fish, microfauna_in_view) {
+    // If fish is currently eating, just drift
+    if (fish.isEating()) {
+        return;
+    }
+    // Get current target
+    let target = fish.getStrikeTarget();
+    // If no target, look for nearest food
+    if (!target) {
+        const nearestFood = findNearestFood(fish, microfauna_in_view);
+        if (nearestFood) {
+            target = nearestFood;
+            fish.startStrike(target);
+        }
+        else {
+            // No food found, use normal movement
+            handleNormalMovement(fish, [], []);
+            return;
+        }
+    }
+    // Calculate direction and distance to target
+    const direction = target.position.value.subtract(fish.position.value);
+    const distance = direction.magnitude();
+    // If not in strike mode and within striking distance, start strike
+    if (!fish.isInStrike() && distance < 150) {
+        fish.startStrike(target);
+    }
+    // Handle movement based on whether we're in strike mode
+    if (fish.isInStrike()) {
+        // When striking, use direct acceleration for precise movement
+        direction.divideInPlace(distance);
+        fish.position.applyAcceleration(direction.multiply(0.3), 1);
+    }
+    else {
+        // When not striking, use net force to influence movement
+        // This will work with the initiative system for more natural movement
+        const forceMagnitude = 0.2; // Strong enough to influence movement but not override initiative
+        const netForce = direction.divide(distance).multiply(forceMagnitude);
+        applyMovement(fish, netForce, forceMagnitude);
+    }
+    // Check if caught the target
+    if (distance < 20) {
+        fish.endStrike();
+        fish.decreaseHunger(0.03);
+        fish.startEating();
+        // Remove the target from the tank
+        if (target instanceof Microfauna && target.tank) {
+            const index = target.tank.microfauna.indexOf(target);
+            if (index > -1) {
+                target.tank.microfauna.splice(index, 1);
+            }
+        }
+    }
+}
+/**
+ * Finds the nearest food source within the fish's field of view
+ */
+function findNearestFood(fish, fish_in_view) {
+    let nearest = null;
+    let minDistance = Infinity;
+    const HUNT_RADIUS = 200; // Maximum distance to detect food
+    for (const inhabitant of fish_in_view) {
+        if (inhabitant.constructor.name === 'Microfauna') {
+            const distance = fish.distanceTo(inhabitant);
+            if (distance < HUNT_RADIUS && distance < minDistance) {
+                nearest = inhabitant;
+                minDistance = distance;
+            }
+        }
+    }
+    return nearest;
 }
 /**
  * Handles movement for a fish in normal mode

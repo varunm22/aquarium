@@ -43,13 +43,15 @@ export class Tank {
         this.microfauna.push(microfauna);
     }
     update() {
+        // Combine all inhabitants for updates
+        const allInhabitants = [...this.fish, ...this.microfauna];
         // Update all fish in the tank
         for (let fish of this.fish) {
-            fish.update(this.fish);
+            fish.update(allInhabitants);
         }
         // Update all microfauna
         for (let micro of this.microfauna) {
-            micro.update(this.microfauna);
+            micro.update(allInhabitants);
         }
     }
     render() {

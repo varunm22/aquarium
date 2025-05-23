@@ -67,6 +67,31 @@ export class Fish extends Inhabitant {
     increaseFear(amount, direction) {
         this.fear.increase(amount, direction);
     }
+    // Public methods for hunger
+    getHungerValue() {
+        return this.hunger.value;
+    }
+    isInStrike() {
+        return this.hunger.inStrike;
+    }
+    getStrikeTarget() {
+        return this.hunger.target;
+    }
+    startStrike(target) {
+        this.hunger.startStrike(target);
+    }
+    endStrike() {
+        this.hunger.endStrike();
+    }
+    isEating() {
+        return this.hunger.isEating > 0;
+    }
+    startEating() {
+        this.hunger.startEating();
+    }
+    decreaseHunger(amount) {
+        this.hunger.value = Math.max(0, this.hunger.value - amount);
+    }
     update(inhabitants) {
         if (!this.in_water) {
             if (!behavior.handleNotInWater(this)) {
@@ -81,6 +106,9 @@ export class Fish extends Inhabitant {
         // Handle movement based on fear level
         if (this.fear.value > 0.5) {
             behavior.handleFearMovement(this, fish_in_view, fish_by_lateral_line);
+        }
+        else if (this.hunger.value > 0.1) {
+            behavior.handleHungerMovement(this, microfauna_in_view);
         }
         else {
             behavior.handleNormalMovement(this, fish_in_view, fish_by_lateral_line);
