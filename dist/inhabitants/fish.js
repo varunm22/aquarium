@@ -10,7 +10,7 @@ export class Fish extends Inhabitant {
         this.initiative = new Initiative(0);
         this.fear = new Fear(0);
         this.hunger = new Hunger(0);
-        this.splash = false;
+        this.splash = 0;
         // Set in_water based on initial y position relative to tank bounds
         const bounds = getTankBounds();
         this.in_water = position.y >= bounds.min.y;
@@ -93,16 +93,20 @@ export class Fish extends Inhabitant {
         this.hunger.value = Math.max(0, this.hunger.value - amount);
     }
     update(inhabitants) {
+        // Decrement splash counter if active
+        if (this.splash > 0) {
+            this.splash--;
+        }
         if (!this.in_water) {
             if (!behavior.handleNotInWater(this)) {
                 super.update(inhabitants);
                 return;
             }
         }
-        // Update factors
-        behavior.updateFactors(this);
-        // Scan environment
+        // Scan environment first to get fish_by_lateral_line
         const { fish_in_view, fish_by_lateral_line, microfauna_in_view } = behavior.scanEnvironment(this, inhabitants);
+        // Update factors with fish_by_lateral_line for splash detection
+        behavior.updateFactors(this, fish_by_lateral_line);
         // Handle movement based on fear level
         if (this.fear.value > 0.5) {
             behavior.handleFearMovement(this, fish_in_view, fish_by_lateral_line);
@@ -113,8 +117,6 @@ export class Fish extends Inhabitant {
         else {
             behavior.handleNormalMovement(this, fish_in_view, fish_by_lateral_line);
         }
-        // Reset splash flag after one frame
-        this.splash = false;
         super.update(inhabitants);
     }
     getVerticalTilt() {

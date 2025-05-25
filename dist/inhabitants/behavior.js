@@ -15,16 +15,26 @@ export function handleNotInWater(fish) {
         fish.in_water = true;
         fish.position.setShouldConstrain(true); // Enable constraints when entering water
         fish.position.delta.y *= 0.5; // slow down when entering water
-        fish.splash = true; // Set splash to true when entering water
+        fish.splash = 10; // Set splash counter to 10 frames
     }
     return false; // Skip normal behavior
 }
 /**
  * Updates all the fish's internal factors (fear, hunger, etc)
  */
-export function updateFactors(fish) {
+export function updateFactors(fish, fish_by_lateral_line) {
     fish.updateFear();
     fish.updateHunger();
+    // Check for splashes from nearby fish
+    for (let other of fish_by_lateral_line) {
+        if (other instanceof Fish && other.splash > 0) {
+            const direction = other.position.value.subtract(fish.position.value);
+            const distance = direction.magnitude();
+            const baseDistance = 300;
+            const splashIntensity = Math.min(0.3, baseDistance / distance);
+            fish.increaseFear(splashIntensity, direction);
+        }
+    }
 }
 /**
  * Scans the environment for other inhabitants and categorizes them
@@ -39,7 +49,7 @@ export function scanEnvironment(fish, inhabitants) {
                 if (fish.isInFieldOfView(other, 45, 300)) {
                     fish_in_view.push(other);
                 }
-                else if (fish.distanceTo(other) <= 50 || (other instanceof Fish && other.splash)) { // Check lateral line or splash
+                else if (fish.distanceTo(other) <= 50 || other.splash > 0) { // Check lateral line or splash
                     fish_by_lateral_line.push(other);
                 }
             }
@@ -84,19 +94,10 @@ function calculateNetForce(fish, fish_in_view, fish_by_lateral_line, params = {}
             }
         }
     }
-    // Handle fish detected by lateral line or splash
+    // Handle fish detected by lateral line
     for (let other of fish_by_lateral_line) {
         if (other instanceof Fish) {
             totalForce.addInPlace(fish.calculateRepulsionForce(other, finalParams.repulsionCap, finalParams.repulsionMultiplier));
-            if (other.splash) {
-                const direction = other.position.value.subtract(fish.position.value);
-                const distance = direction.magnitude();
-                const baseDistance = 200;
-                const splashIntensity = Math.min(1, baseDistance / distance);
-                const splashLocation = other.position.value.add(new Vector(0, 200, 0));
-                const fearDirection = splashLocation.subtract(fish.position.value);
-                fish.increaseFear(splashIntensity, fearDirection);
-            }
         }
     }
     if (fish_in_view.length === 0) {
@@ -187,7 +188,7 @@ export function handleHungerMovement(fish, microfauna_in_view) {
     const direction = target.position.value.subtract(fish.position.value);
     const distance = direction.magnitude();
     // If not in strike mode and within striking distance, start strike
-    if (!fish.isInStrike() && distance < 150) {
+    if (!fish.isInStrike() && distance < 100) {
         fish.startStrike(target);
     }
     // Handle movement based on whether we're in strike mode
@@ -199,7 +200,7 @@ export function handleHungerMovement(fish, microfauna_in_view) {
     else {
         // When not striking, use net force to influence movement
         // This will work with the initiative system for more natural movement
-        const forceMagnitude = 0.2; // Strong enough to influence movement but not override initiative
+        const forceMagnitude = 0.1; // Strong enough to influence movement but not override initiative
         const netForce = direction.divide(distance).multiply(forceMagnitude);
         applyMovement(fish, netForce, forceMagnitude);
     }

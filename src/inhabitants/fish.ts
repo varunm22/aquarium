@@ -38,14 +38,14 @@ export abstract class Fish extends Inhabitant {
     protected fear: Fear;
     protected hunger: Hunger;
     public in_water: boolean;
-    public splash: boolean;
+    public splash: number;
 
     constructor(position: Position, size: number) {
         super(position, size);
         this.initiative = new Initiative(0);
         this.fear = new Fear(0);
         this.hunger = new Hunger(0);
-        this.splash = false;
+        this.splash = 0;
         
         // Set in_water based on initial y position relative to tank bounds
         const bounds = getTankBounds();
@@ -149,6 +149,11 @@ export abstract class Fish extends Inhabitant {
     }
 
     update(inhabitants: Inhabitant[]): void {
+        // Decrement splash counter if active
+        if (this.splash > 0) {
+            this.splash--;
+        }
+
         if (!this.in_water) {
             if (!behavior.handleNotInWater(this)) {
                 super.update(inhabitants);
@@ -156,11 +161,11 @@ export abstract class Fish extends Inhabitant {
             }
         }
 
-        // Update factors
-        behavior.updateFactors(this);
-
-        // Scan environment
+        // Scan environment first to get fish_by_lateral_line
         const { fish_in_view, fish_by_lateral_line, microfauna_in_view } = behavior.scanEnvironment(this, inhabitants);
+
+        // Update factors with fish_by_lateral_line for splash detection
+        behavior.updateFactors(this, fish_by_lateral_line);
 
         // Handle movement based on fear level
         if (this.fear.value > 0.5) {
@@ -170,9 +175,6 @@ export abstract class Fish extends Inhabitant {
         } else {
             behavior.handleNormalMovement(this, fish_in_view, fish_by_lateral_line);
         }
-
-        // Reset splash flag after one frame
-        this.splash = false;
 
         super.update(inhabitants);
     }

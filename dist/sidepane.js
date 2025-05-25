@@ -1,5 +1,6 @@
 import { EmberTetra } from './inhabitants/embertetra.js';
 import { UserFish } from './inhabitants/userfish.js';
+import { Fish } from './inhabitants/fish.js';
 import { getTankBounds } from './constants.js';
 // p5.js constants
 const CENTER = 'center';
@@ -219,10 +220,15 @@ export class SidePane {
         textAlign(LEFT, CENTER);
         const infoX = this.x + this.padding + 50; // Start after the sprite
         const infoY = y + this.rowHeight / 2;
-        // Position information
-        text(`Position: (${Math.round(fish.position.x)}, ${Math.round(fish.position.y)}, ${Math.round(fish.position.z)})`, infoX, infoY - 10);
-        // Size information
-        text(`Size: ${Math.round(fish.size)}`, infoX, infoY + 10);
+        // Only show fear and hunger for Fish instances
+        if (fish instanceof Fish) {
+            // Fear information
+            const fearValue = Math.round(fish.getFearValue() * 100);
+            text(`Fear: ${fearValue}%`, infoX, infoY - 10);
+            // Hunger information
+            const hungerValue = Math.round(fish.getHungerValue() * 100);
+            text(`Hunger: ${hungerValue}%`, infoX, infoY + 10);
+        }
         pop();
         // Add delete button
         const deleteButtonSize = 16;
