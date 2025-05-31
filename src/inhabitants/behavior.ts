@@ -78,7 +78,6 @@ export function scanEnvironment(fish: Fish, inhabitants: Inhabitant[]): {
 function applyMovement(
     fish: Fish, 
     netForce: Vector, 
-    forceMagnitude: number,
     params: {
         movementChance?: number,
         initiativeMultiplier?: number,
@@ -100,6 +99,7 @@ function applyMovement(
     const finalParams = { ...defaultParams, ...params };
 
     // Update initiative based on force magnitude
+    const forceMagnitude = netForce.magnitude();
     fish.updateInitiative(forceMagnitude * finalParams.initiativeMultiplier);
 
     // Calculate movement probability and magnitude based on initiative
@@ -217,11 +217,10 @@ function calculateNormalNetForce(fish: Fish, fish_in_view: Inhabitant[], fish_by
  */
 export function handleFearMovement(fish: Fish, fish_in_view: Inhabitant[], fish_by_lateral_line: Inhabitant[]): void {
     const netForce = calculateFearNetForce(fish, fish_in_view, fish_by_lateral_line);
-    const forceMagnitude = netForce.magnitude();
     const params = {
         forceMultiplier: 3,
     }
-    applyMovement(fish, netForce, forceMagnitude, params);
+    applyMovement(fish, netForce, params);
 }
 
 /**
@@ -251,14 +250,13 @@ export function handleHungerMovement(fish: Fish, microfauna_in_view: Inhabitant[
         // Add random movement before searching for food
         if (Math.random() < 0.1) {
             const randomForce = generateConstrainedRandomVector(0.1);
-            applyMovement(fish, randomForce, randomForce.magnitude());
+            applyMovement(fish, randomForce);
         }
         const nearestFood = findNearestFood(fish, microfauna_in_view);
         if (nearestFood) {
             fish.setHungerTarget(nearestFood);
         } else {
             // No food found
-            // handleNormalMovement(fish, [], []);
             return;
         }
     }
@@ -297,7 +295,7 @@ export function handleHungerMovement(fish: Fish, microfauna_in_view: Inhabitant[
         // This will work with the initiative system for more natural movement
         const forceMagnitude = 0.01; // Strong enough to influence movement but not override initiative
         const netForce = direction.divide(distance).multiply(forceMagnitude);
-        applyMovement(fish, netForce, forceMagnitude);
+        applyMovement(fish, netForce);
     }
 
     // Check if caught the target
@@ -342,6 +340,5 @@ function findNearestFood(fish: Fish, fish_in_view: Inhabitant[]): Inhabitant | n
  */
 export function handleNormalMovement(fish: Fish, fish_in_view: Inhabitant[], fish_by_lateral_line: Inhabitant[]): void {
     const netForce = calculateNormalNetForce(fish, fish_in_view, fish_by_lateral_line);
-    const forceMagnitude = netForce.magnitude();
-    applyMovement(fish, netForce, forceMagnitude);
+    applyMovement(fish, netForce);
 } 
