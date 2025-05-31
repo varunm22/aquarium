@@ -5,7 +5,6 @@ export class Position extends Factor {
     constructor(value, delta, shouldConstrain = true) {
         super(value, delta);
         this.accelerationDuration = 0;
-        this.originalDdelta = Vector.zero();
         this.shouldConstrain = shouldConstrain;
     }
     get x() {
@@ -30,7 +29,6 @@ export class Position extends Factor {
         this.shouldConstrain = shouldConstrain;
     }
     applyAcceleration(acceleration, duration) {
-        this.originalDdelta = this.ddelta;
         this.ddelta = acceleration;
         this.accelerationDuration = duration;
     }
@@ -58,7 +56,7 @@ export class Position extends Factor {
         if (this.accelerationDuration > 0) {
             this.accelerationDuration--;
             if (this.accelerationDuration === 0) {
-                this.ddelta = this.originalDdelta;
+                this.ddelta = Vector.zero();
             }
         }
         // Apply speed decay

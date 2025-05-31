@@ -4,7 +4,6 @@ import { getTankBounds } from '../constants.js';
 
 export class Position extends Factor<Vector> {
     private accelerationDuration: number = 0;
-    private originalDdelta: Vector = Vector.zero();
     private shouldConstrain: boolean;
 
     constructor(value: Vector, delta: Vector, shouldConstrain: boolean = true) {
@@ -41,7 +40,6 @@ export class Position extends Factor<Vector> {
     }
 
     applyAcceleration(acceleration: Vector, duration: number): void {
-        this.originalDdelta = this.ddelta;
         this.ddelta = acceleration;
         this.accelerationDuration = duration;
     }
@@ -76,7 +74,7 @@ export class Position extends Factor<Vector> {
         if (this.accelerationDuration > 0) {
             this.accelerationDuration--;
             if (this.accelerationDuration === 0) {
-                this.ddelta = this.originalDdelta;
+                this.ddelta = Vector.zero();
             }
         }
 

@@ -210,18 +210,27 @@ export function handleHungerMovement(fish, microfauna_in_view) {
             return;
         }
     }
+    // If we have a target, verify it still exists in the tank and is in sight
     let target = fish.getStrikeTarget();
-    // If we have a target, verify it still exists in the tank
-    // TODO: make this cause territorial aggression
-    if (target instanceof Microfauna && target.tank) {
-        const index = target.tank.microfauna.indexOf(target);
-        if (index === -1) {
-            fish.endStrike();
-            return;
-        }
+    let shouldEndStrike = false;
+    // Check if target is valid and in tank
+    if (!target || !(target instanceof Microfauna && target.tank)) {
+        shouldEndStrike = true;
     }
     else {
-        fish.endStrike;
+        const index = target.tank.microfauna.indexOf(target);
+        if (index === -1) {
+            shouldEndStrike = true;
+        }
+        else {
+            // Check if target is out of sight with 0.1 chance to end strike
+            if (!fish.isInFieldOfView(target, 45, 300) && Math.random() < 0.1) {
+                shouldEndStrike = true;
+            }
+        }
+    }
+    if (shouldEndStrike) {
+        fish.endStrike();
         return;
     }
     // Calculate direction and distance to target
