@@ -5,7 +5,7 @@ export class Fear extends Factor<number> {
     private direction: Vector;
     private decayRate: number;
 
-    constructor(value: number = 0, delta: number = 0, decayRate: number = 0.005) {
+    constructor(value: number = 0, delta: number = 0, decayRate: number = 0.002) {
         super(value, delta);
         this.direction = Vector.zero();
         this.decayRate = decayRate;

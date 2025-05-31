@@ -81,6 +81,6 @@ export class Position extends Factor<Vector> {
         }
 
         // Apply speed decay
-        this.delta.multiplyInPlace(0.97);
+        this.delta.multiplyInPlace(0.96);
     }
 } 

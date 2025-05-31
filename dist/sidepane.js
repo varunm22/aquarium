@@ -150,7 +150,9 @@ export class SidePane {
     }
     renderFishView(tank) {
         // Calculate max scroll based on number of fish and visible rows
-        const regularFish = tank.fish.filter(fish => fish instanceof EmberTetra && !(fish instanceof UserFish));
+        const regularFish = tank.fish
+            .filter(fish => fish instanceof EmberTetra && !(fish instanceof UserFish))
+            .sort((a, b) => a.id.localeCompare(b.id)); // Sort by ID
         const totalHeight = regularFish.length * this.rowHeight;
         const visibleRows = Math.floor((this.height - this.headerHeight - this.footerHeight) / this.rowHeight);
         this.maxScroll = Math.max(0, totalHeight - visibleRows * this.rowHeight);
@@ -224,10 +226,13 @@ export class SidePane {
         if (fish instanceof Fish) {
             // Fear information
             const fearValue = Math.round(fish.getFearValue() * 100);
-            text(`Fear: ${fearValue}%`, infoX, infoY - 10);
+            text(`Fear: ${fearValue}%`, infoX, infoY - 20);
+            // Size information
+            const sizeValue = Math.round(fish.size);
+            text(`Size: ${sizeValue}`, infoX, infoY);
             // Hunger information
             const hungerValue = Math.round(fish.getHungerValue() * 100);
-            text(`Hunger: ${hungerValue}%`, infoX, infoY + 10);
+            text(`Hunger: ${hungerValue}%`, infoX, infoY + 20);
         }
         pop();
         // Add delete button

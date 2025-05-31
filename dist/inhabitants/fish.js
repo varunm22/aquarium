@@ -11,6 +11,7 @@ export class Fish extends Inhabitant {
         this.fear = new Fear(0);
         this.hunger = new Hunger(0);
         this.splash = 0;
+        this.id = Math.random().toString(36).substring(2, 8); // Generate a random 6-character alphanumeric ID
         // Set in_water based on initial y position relative to tank bounds
         const bounds = getTankBounds();
         this.in_water = position.y >= bounds.min.y;
@@ -88,6 +89,9 @@ export class Fish extends Inhabitant {
     }
     startEating() {
         this.hunger.startEating();
+    }
+    setHungerTarget(target) {
+        this.hunger.setTarget(target);
     }
     decreaseHunger(amount) {
         this.hunger.value = Math.max(0, this.hunger.value - amount);

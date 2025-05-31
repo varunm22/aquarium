@@ -39,6 +39,7 @@ export abstract class Fish extends Inhabitant {
     protected hunger: Hunger;
     public in_water: boolean;
     public splash: number;
+    public readonly id: string;
 
     constructor(position: Position, size: number) {
         super(position, size);
@@ -46,6 +47,7 @@ export abstract class Fish extends Inhabitant {
         this.fear = new Fear(0);
         this.hunger = new Hunger(0);
         this.splash = 0;
+        this.id = Math.random().toString(36).substring(2, 8); // Generate a random 6-character alphanumeric ID
         
         // Set in_water based on initial y position relative to tank bounds
         const bounds = getTankBounds();
@@ -142,6 +144,10 @@ export abstract class Fish extends Inhabitant {
 
     public startEating(): void {
         this.hunger.startEating();
+    }
+
+    public setHungerTarget(target: Inhabitant | null): void {
+        this.hunger.setTarget(target);
     }
 
     public decreaseHunger(amount: number): void {

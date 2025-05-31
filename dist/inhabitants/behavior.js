@@ -30,7 +30,7 @@ export function updateFactors(fish, fish_by_lateral_line) {
         if (other instanceof Fish && other.splash > 0) {
             const direction = other.position.value.subtract(fish.position.value);
             const distance = direction.magnitude();
-            const baseDistance = 300;
+            const baseDistance = 35;
             const splashIntensity = Math.min(0.3, baseDistance / distance);
             fish.increaseFear(splashIntensity, direction);
         }
@@ -63,14 +63,42 @@ export function scanEnvironment(fish, inhabitants) {
     return { fish_in_view, fish_by_lateral_line, microfauna_in_view };
 }
 /**
+ * Applies movement based on the calculated net force and initiative
+ */
+function applyMovement(fish, netForce, forceMagnitude, params = {}) {
+    // Default parameters
+    const defaultParams = {
+        movementChance: 0.2, // Base chance of movement
+        initiativeMultiplier: 2, // How much force magnitude affects initiative
+        initiativeDecay: 0.1, // How much initiative decreases after movement
+        variance: 0.2, // Variance in movement magnitude
+        forceMultiplier: 10 // How much we multiply initiative to get force magnitude
+    };
+    // Merge default parameters with provided parameters
+    const finalParams = Object.assign(Object.assign({}, defaultParams), params);
+    // Update initiative based on force magnitude
+    fish.updateInitiative(forceMagnitude * finalParams.initiativeMultiplier);
+    // Calculate movement probability and magnitude based on initiative
+    if (Math.random() < Math.min(finalParams.movementChance, fish.getInitiativeValue())) {
+        // Normalize the force vector for direction
+        const direction = netForce.divide(forceMagnitude || 1);
+        // Calculate movement magnitude with some variance
+        const baseMagnitude = fish.getInitiativeValue() * finalParams.forceMultiplier;
+        const magnitude = baseMagnitude * (1 + (Math.random() - 0.5) * finalParams.variance);
+        // Apply the movement
+        fish.position.applyAcceleration(direction.multiply(magnitude), 1);
+        fish.setInitiativeValue(fish.getInitiativeValue() * finalParams.initiativeDecay);
+    }
+}
+/**
  * Base function for calculating net force based on environment and behavior parameters
  */
 function calculateNetForce(fish, fish_in_view, fish_by_lateral_line, params = {}) {
     // Default parameters for normal behavior
     const defaultParams = {
-        attractionMultiplier: 0.0005, // Normal attraction
+        attractionMultiplier: 0.005, // Normal attraction
         attractionCap: 0.001, // Standard cap on attraction force
-        repulsionMultiplier: 0.1, // Standard repulsion
+        repulsionMultiplier: 0.2, // Standard repulsion
         repulsionCap: 0.1, // Standard repulsion cap
         randomThreshold: 0.25, // Normal chance of random movement
         randomRange: 0.01 // Normal random vectors
@@ -102,7 +130,7 @@ function calculateNetForce(fish, fish_in_view, fish_by_lateral_line, params = {}
     }
     if (fish_in_view.length === 0) {
         if (Math.random() < finalParams.randomThreshold) {
-            totalForce.addInPlace(Vector.random(-finalParams.randomRange, finalParams.randomRange));
+            totalForce.addInPlace(generateConstrainedRandomVector(finalParams.randomRange));
         }
     }
     return totalForce;
@@ -112,19 +140,20 @@ function calculateNetForce(fish, fish_in_view, fish_by_lateral_line, params = {}
  */
 function calculateFearNetForce(fish, fish_in_view, fish_by_lateral_line) {
     // Only specify parameters that differ from normal behavior
+    const fearValue = fish.getFearValue();
+    const attractionMultiplier = 0.005 + (fearValue - 0.5) * 0.05;
     const fearParams = {
-        attractionMultiplier: 0.005, // Stronger attraction to other fish for safety
+        attractionMultiplier: attractionMultiplier, // Stronger attraction to other fish for safety
         randomRange: 0.5 // Larger random vectors
     };
     const totalForce = calculateNetForce(fish, fish_in_view, fish_by_lateral_line, fearParams);
     // Add strong force away from fear direction, scaled by fear magnitude
     const fearDirection = fish.getFearDirection();
-    if (fearDirection.magnitude() > 0) {
-        // Scale the escape force by fear value (0.5 to 1.0 maps to 0.1 to 0.2)
-        const fearMagnitude = (fish.getFearValue() - 0.5) * 2; // Normalize 0.5-1.0 to 0-1
-        const escapeForce = fearDirection.multiply(-0.1 * (1 + fearMagnitude));
-        totalForce.addInPlace(escapeForce);
-    }
+    // Scale the escape force by fear value (0.5 to 1.0 maps to 0.1 to 0.2)
+    const fearMagnitude = Math.max(fearValue - 0.7, 0) * 0.05;
+    // const fearMagnitude = (fish.getFearValue() - 0.5) * 2; // Normalize 0.5-1.0 to 0-1
+    const escapeForce = fearDirection.multiply(-1 * fearMagnitude);
+    totalForce.addInPlace(escapeForce);
     return totalForce;
 }
 /**
@@ -135,31 +164,27 @@ function calculateNormalNetForce(fish, fish_in_view, fish_by_lateral_line) {
     return calculateNetForce(fish, fish_in_view, fish_by_lateral_line);
 }
 /**
- * Applies movement based on the calculated net force and initiative
- */
-function applyMovement(fish, netForce, forceMagnitude) {
-    // Update initiative based on force magnitude
-    fish.updateInitiative(forceMagnitude * 1.5);
-    // Calculate movement probability and magnitude based on initiative
-    if (Math.random() < Math.min(0.25, fish.getInitiativeValue())) {
-        // Normalize the force vector for direction
-        const direction = netForce.divide(forceMagnitude || 1);
-        // Calculate movement magnitude with some variance
-        const baseMagnitude = fish.getInitiativeValue();
-        const variance = 0.2; // 20% variance
-        const magnitude = baseMagnitude * (1 + (Math.random() - 0.5) * variance);
-        // Apply the movement
-        fish.position.applyAcceleration(direction.multiply(magnitude), 1);
-        fish.setInitiativeValue(fish.getInitiativeValue() * 0.2);
-    }
-}
-/**
  * Handles movement for a fish in fear mode
  */
 export function handleFearMovement(fish, fish_in_view, fish_by_lateral_line) {
     const netForce = calculateFearNetForce(fish, fish_in_view, fish_by_lateral_line);
     const forceMagnitude = netForce.magnitude();
-    applyMovement(fish, netForce, forceMagnitude);
+    const params = {
+        forceMultiplier: 3,
+    };
+    applyMovement(fish, netForce, forceMagnitude, params);
+}
+/**
+ * Generates a random vector with constrained vertical movement
+ * The vertical (y) component will be at most half the magnitude of the horizontal (x,z) components
+ */
+function generateConstrainedRandomVector(range) {
+    const x = (Math.random() - 0.5) * range;
+    const z = (Math.random() - 0.5) * range;
+    const horizontalMagnitude = Math.sqrt(x * x + z * z);
+    const maxY = horizontalMagnitude * 0.66;
+    const y = (Math.random() - 0.5) * maxY;
+    return new Vector(x, y, z);
 }
 /**
  * Handles movement for a fish in hunger mode
@@ -169,20 +194,36 @@ export function handleHungerMovement(fish, microfauna_in_view) {
     if (fish.isEating()) {
         return;
     }
-    // Get current target
-    let target = fish.getStrikeTarget();
     // If no target, look for nearest food
-    if (!target) {
+    if (!fish.getStrikeTarget()) {
+        // Add random movement before searching for food
+        if (Math.random() < 0.1) {
+            const randomForce = generateConstrainedRandomVector(0.1);
+            applyMovement(fish, randomForce, randomForce.magnitude());
+        }
         const nearestFood = findNearestFood(fish, microfauna_in_view);
         if (nearestFood) {
-            target = nearestFood;
-            fish.startStrike(target);
+            fish.setHungerTarget(nearestFood);
         }
         else {
-            // No food found, use normal movement
-            handleNormalMovement(fish, [], []);
+            // No food found
+            // handleNormalMovement(fish, [], []);
             return;
         }
+    }
+    let target = fish.getStrikeTarget();
+    // If we have a target, verify it still exists in the tank
+    // TODO: make this cause territorial aggression
+    if (target instanceof Microfauna && target.tank) {
+        const index = target.tank.microfauna.indexOf(target);
+        if (index === -1) {
+            fish.endStrike();
+            return;
+        }
+    }
+    else {
+        fish.endStrike;
+        return;
     }
     // Calculate direction and distance to target
     const direction = target.position.value.subtract(fish.position.value);
@@ -195,19 +236,19 @@ export function handleHungerMovement(fish, microfauna_in_view) {
     if (fish.isInStrike()) {
         // When striking, use direct acceleration for precise movement
         direction.divideInPlace(distance);
-        fish.position.applyAcceleration(direction.multiply(0.3), 1);
+        fish.position.applyAcceleration(direction.multiply(Math.max(distance * 0.002, 0.1)), 1);
     }
     else {
         // When not striking, use net force to influence movement
         // This will work with the initiative system for more natural movement
-        const forceMagnitude = 0.1; // Strong enough to influence movement but not override initiative
+        const forceMagnitude = 0.01; // Strong enough to influence movement but not override initiative
         const netForce = direction.divide(distance).multiply(forceMagnitude);
         applyMovement(fish, netForce, forceMagnitude);
     }
     // Check if caught the target
     if (distance < 20) {
         fish.endStrike();
-        fish.decreaseHunger(0.03);
+        fish.decreaseHunger(0.3);
         fish.startEating();
         // Remove the target from the tank
         if (target instanceof Microfauna && target.tank) {
