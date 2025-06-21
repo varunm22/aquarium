@@ -58,7 +58,7 @@ export class SidePane {
         this.y = tank.y;
         this.width = tank.width / 3;
         this.height = tank.height;
-        this.rowHeight = 60;
+        this.rowHeight = 50;
         this.padding = 10;
         this.scrollOffset = 0;
         this.maxScroll = 0;
@@ -314,15 +314,13 @@ export class SidePane {
         if (fish instanceof Fish) {
             // Fear information
             const fearValue = Math.round(fish.getFearValue() * 100);
-            text(`Fear: ${fearValue}%`, infoX, infoY - 20);
-            
-            // Size information
-            const sizeValue = Math.round(fish.size);
-            text(`Size: ${sizeValue}`, infoX, infoY);
+            const scaredStatus = fish.getFearValue() > 0.5 ? ' - scared' : '';
+            text(`Fear: ${fearValue}%${scaredStatus}`, infoX, infoY - 9);
             
             // Hunger information
             const hungerValue = Math.round(fish.getHungerValue() * 100);
-            text(`Hunger: ${hungerValue}%`, infoX, infoY + 20);
+            const feedingStatus = fish.isInFeedingMode() ? ' - feeding' : '';
+            text(`Hunger: ${hungerValue}%${feedingStatus}`, infoX, infoY + 9);
         }
         pop();
 

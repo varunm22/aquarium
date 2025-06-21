@@ -154,6 +154,14 @@ export abstract class Fish extends Inhabitant {
         this.hunger.value = Math.max(0, this.hunger.value - amount);
     }
 
+    public isInFeedingMode(): boolean {
+        return this.hunger.isFeeding();
+    }
+
+    public setFeedingMode(feeding: boolean): void {
+        this.hunger.setFeeding(feeding);
+    }
+
     update(inhabitants: Inhabitant[]): void {
         // Decrement splash counter if active
         if (this.splash > 0) {
@@ -173,13 +181,20 @@ export abstract class Fish extends Inhabitant {
         // Update factors with fish_by_lateral_line for splash detection
         behavior.updateFactors(this, fish_by_lateral_line);
 
-        // Handle movement based on fear level
+        // Handle movement based on fear level and feeding mode
         if (this.fear.value > 0.5) {
+            // If fear response is activated, leave feeding mode
+            this.hunger.exitFeedingDueToFear();
             behavior.handleFearMovement(this, fish_in_view, fish_by_lateral_line);
-        } else if (this.hunger.value > 0.1) {
-            behavior.handleHungerMovement(this, microfauna_in_view);
         } else {
-            behavior.handleNormalMovement(this, fish_in_view, fish_by_lateral_line);
+            // Update feeding mode based on the new logic
+            this.hunger.updateFeedingMode(microfauna_in_view);
+            
+            if (this.isInFeedingMode()) {
+                behavior.handleHungerMovement(this, microfauna_in_view);
+            } else {
+                behavior.handleNormalMovement(this, fish_in_view, fish_by_lateral_line);
+            }
         }
 
         super.update(inhabitants);
