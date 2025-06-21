@@ -49,7 +49,7 @@ export class Hunger extends Factor {
             }
             else {
                 // If no microfauna in sight: enter feeding mode with probability = current hunger / 100
-                probability = currentHunger / 100;
+                probability = currentHunger / 200;
             }
             if (Math.random() < probability) {
                 this.feeding = true;
