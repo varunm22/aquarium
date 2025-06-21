@@ -53,9 +53,19 @@ export function scanEnvironment(fish, inhabitants) {
                     fish_by_lateral_line.push(other);
                 }
             }
-            else if (other.constructor.name === 'Microfauna') { // Handle microfauna
+            else if (other instanceof Microfauna) { // Handle microfauna
                 if (fish.isInFieldOfView(other, 45, 300)) {
-                    microfauna_in_view.push(other);
+                    // Apply size-based detection probability
+                    // No detection from size 1.0 to 1.5, then scale from 0% at size 1.5 to 100% at size 3.5
+                    const size = other.getSize();
+                    let detectionProbability = 0;
+                    if (size >= 1.5) {
+                        // Scale from 0% at size 1.5 to 100% at size 3.5
+                        detectionProbability = Math.min(1, (size - 1.5) / (3.5 - 1.5));
+                    }
+                    if (Math.random() < detectionProbability) {
+                        microfauna_in_view.push(other);
+                    }
                 }
             }
         }

@@ -8,13 +8,28 @@ export class Microfauna extends Inhabitant {
     private static readonly MAX_NEARBY = 20;
     private static readonly MAX_DISTANCE = 100;
     private static readonly BASE_REPRODUCTION_CHANCE = 0.005;
+    
+    // Growth properties (size is inherited from Inhabitant)
+    private static readonly GROWTH_CHANCE = 0.01;
+    private static readonly GROWTH_AMOUNT = 0.1;
+    private static readonly MAX_SIZE = 3.5;
 
     constructor(position: Position) {
-        super(position, 2);
+        super(position, 1); // Start with size 1
     }
 
     setTank(tank: Tank): void {
         this.tank = tank;
+    }
+
+    getSize(): number {
+        return this.size;
+    }
+
+    private updateSize(): void {
+        if (this.size < Microfauna.MAX_SIZE && Math.random() < Microfauna.GROWTH_CHANCE) {
+            this.size = Math.min(this.size + Microfauna.GROWTH_AMOUNT, Microfauna.MAX_SIZE);
+        }
     }
 
     private getNearbyMicrofaunaCount(inhabitants: Inhabitant[]): number {
@@ -36,6 +51,9 @@ export class Microfauna extends Inhabitant {
     }
 
     update(inhabitants: Inhabitant[] = []): void {
+        // Update size based on frame count
+        this.updateSize();
+
         // 10% chance of random movement each frame
         if (Math.random() < 0.1) {
             // Calculate distance from bottom (0 to 1, where 1 is at bottom)

@@ -3,11 +3,19 @@ import { Position } from '../factors/position.js';
 import { Vector } from '../vector.js';
 export class Microfauna extends Inhabitant {
     constructor(position) {
-        super(position, 2);
+        super(position, 1); // Start with size 1
         this.tank = null;
     }
     setTank(tank) {
         this.tank = tank;
+    }
+    getSize() {
+        return this.size;
+    }
+    updateSize() {
+        if (this.size < Microfauna.MAX_SIZE && Math.random() < Microfauna.GROWTH_CHANCE) {
+            this.size = Math.min(this.size + Microfauna.GROWTH_AMOUNT, Microfauna.MAX_SIZE);
+        }
     }
     getNearbyMicrofaunaCount(inhabitants) {
         return inhabitants.filter(other => other !== this &&
@@ -24,6 +32,8 @@ export class Microfauna extends Inhabitant {
         return Microfauna.BASE_REPRODUCTION_CHANCE / (1 + nearbyCount);
     }
     update(inhabitants = []) {
+        // Update size based on frame count
+        this.updateSize();
         // 10% chance of random movement each frame
         if (Math.random() < 0.1) {
             // Calculate distance from bottom (0 to 1, where 1 is at bottom)
@@ -53,3 +63,7 @@ export class Microfauna extends Inhabitant {
 Microfauna.MAX_NEARBY = 20;
 Microfauna.MAX_DISTANCE = 100;
 Microfauna.BASE_REPRODUCTION_CHANCE = 0.005;
+// Growth properties (size is inherited from Inhabitant)
+Microfauna.GROWTH_CHANCE = 0.01;
+Microfauna.GROWTH_AMOUNT = 0.1;
+Microfauna.MAX_SIZE = 3.5;
