@@ -9,7 +9,7 @@ export class Fish extends Inhabitant {
         super(position, size);
         this.initiative = new Initiative(0);
         this.fear = new Fear(0);
-        this.hunger = new Hunger(0);
+        this.hunger = new Hunger(0.4);
         this.splash = 0;
         this.id = Math.random().toString(36).substring(2, 8); // Generate a random 6-character alphanumeric ID
         // Set in_water based on initial y position relative to tank bounds

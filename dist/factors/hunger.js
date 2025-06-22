@@ -44,12 +44,16 @@ export class Hunger extends Factor {
             // Not currently in feeding mode - check if we should enter
             let probability = 0;
             if (hasMicrofaunaInSight) {
-                // If microfauna in sight: enter feeding mode with probability = current hunger
-                probability = currentHunger / 10;
+                // If microfauna in sight: enter feeding mode with probability = current hunger (only if hunger > 0.1)
+                if (currentHunger > 0.1) {
+                    probability = currentHunger / 10;
+                }
             }
             else {
-                // If no microfauna in sight: enter feeding mode with probability = current hunger / 100
-                probability = currentHunger / 200;
+                // If no microfauna in sight: enter feeding mode with probability = current hunger / 100 (only if hunger > 0.5)
+                if (currentHunger > 0.5) {
+                    probability = currentHunger / 200;
+                }
             }
             if (Math.random() < probability) {
                 this.feeding = true;
