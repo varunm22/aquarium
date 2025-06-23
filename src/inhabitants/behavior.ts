@@ -388,7 +388,7 @@ export function handleHungerMovement(fish: Fish, microfauna_in_view: Inhabitant[
     // Check if caught the target
     if (distance < 10) {
         fish.endStrike();
-        fish.decreaseHunger(0.1);
+        fish.decreaseHunger(0.2);
         fish.startEating();
         
         // Remove the target from the tank
