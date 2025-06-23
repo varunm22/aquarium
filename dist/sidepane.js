@@ -13,7 +13,8 @@ export class SidePane {
         this.mouseWasPressed = false;
         this.tabs = [
             { id: 'fish', label: 'fish' },
-            { id: 'chem', label: 'chem' }
+            { id: 'chem', label: 'chem' },
+            { id: 'actions', label: 'actions' }
         ];
         this.tank = tank;
         this.x = tank.x + tank.width + 50; // 50px gap from tank
@@ -89,8 +90,11 @@ export class SidePane {
         if (this.selectedView === 'fish') {
             this.renderFishView(tank);
         }
-        else {
+        else if (this.selectedView === 'chem') {
             this.renderChemView();
+        }
+        else if (this.selectedView === 'actions') {
+            this.renderActionsView();
         }
         // Draw the masking frame
         this.drawMaskingFrame(tank);
@@ -177,6 +181,40 @@ export class SidePane {
         textSize(12);
         textAlign(LEFT, CENTER);
         text('Coming soon', this.x + this.padding, rowY + this.rowHeight / 2);
+    }
+    renderActionsView() {
+        const buttonY = this.y + this.headerHeight + this.padding;
+        const buttonWidth = this.width - (this.padding * 2);
+        const buttonHeight = 40;
+        // Draw feed button
+        fill(100, 150, 255); // Blue
+        stroke(50, 100, 200); // Darker blue border
+        strokeWeight(1);
+        rect(this.x + this.padding, buttonY, buttonWidth, buttonHeight);
+        // Draw button text
+        fill(255, 255, 255); // White text
+        noStroke();
+        textSize(14);
+        textAlign(CENTER, CENTER);
+        text('Feed', this.x + this.padding + buttonWidth / 2, buttonY + buttonHeight / 2);
+        // Handle feed button click
+        if (this.mouseWasPressed && !mouseIsPressed) {
+            if (mouseX >= this.x + this.padding && mouseX <= this.x + this.padding + buttonWidth &&
+                mouseY >= buttonY && mouseY <= buttonY + buttonHeight) {
+                this.handleFeedAction();
+            }
+        }
+    }
+    handleFeedAction() {
+        // Drop 3-5 food particles when feeding
+        const numPellets = Math.floor(Math.random() * 3) + 3; // 3-5 pellets
+        for (let i = 0; i < numPellets; i++) {
+            // Stagger the drops slightly for a more natural look
+            setTimeout(() => {
+                this.tank.dropFood();
+            }, i * 100); // 100ms delay between each pellet
+        }
+        console.log(`Dropped ${numPellets} food pellets!`);
     }
     drawMaskingFrame(tank) {
         push();

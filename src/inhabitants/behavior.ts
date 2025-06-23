@@ -1,6 +1,7 @@
 import { Inhabitant } from './inhabitant.js';
 import { Fish } from './fish.js';
 import { Microfauna } from './microfauna.js';
+import { Food } from './food.js';
 import { Vector } from '../vector.js';
 import { getTankBounds } from '../constants.js';
 
@@ -42,17 +43,49 @@ export function updateFactors(fish: Fish, fish_by_lateral_line: Inhabitant[]): v
     }
 }
 
+// Helper function to calculate distance between fish and food/inhabitant
+function distanceToTarget(fish: Fish, target: Inhabitant | Food): number {
+    if (target instanceof Food) {
+        return fish.position.value.distanceTo(target.position.value);
+    } else {
+        return fish.distanceTo(target);
+    }
+}
+
+// Helper function to check if target is in field of view
+function isTargetInFieldOfView(fish: Fish, target: Inhabitant | Food, maxAngle: number = 45, maxDistance: number = 300): boolean {
+    if (target instanceof Food) {
+        // Replicate the field of view logic for Food
+        const disp = target.position.value.subtract(fish.position.value);
+        const distance = fish.position.value.distanceTo(target.position.value);
+        
+        if (distance > maxDistance) return false;
+        
+        const disp_norm = disp.divide(disp.magnitude());
+        const fish_dir = fish.position.delta.divide(fish.position.delta.magnitude());
+        const dotProduct = disp_norm.dotProduct(fish_dir);
+        const angle = Math.acos(Math.max(-1, Math.min(1, dotProduct))); // Clamp to prevent NaN
+        const angleDegrees = (angle * 180) / Math.PI;
+        
+        return angleDegrees <= maxAngle;
+    } else {
+        return fish.isInFieldOfView(target, maxAngle, maxDistance);
+    }
+}
+
 /**
  * Scans the environment for other inhabitants and categorizes them
  */
-export function scanEnvironment(fish: Fish, inhabitants: Inhabitant[]): {
+export function scanEnvironment(fish: Fish, inhabitants: Inhabitant[], food: Food[]): {
     fish_in_view: Inhabitant[],
     fish_by_lateral_line: Inhabitant[],
-    microfauna_in_view: Inhabitant[]
+    microfauna_in_view: Inhabitant[],
+    food_in_view: Food[]
 } {
     const fish_in_view: Inhabitant[] = [];
     const fish_by_lateral_line: Inhabitant[] = [];
     const microfauna_in_view: Inhabitant[] = [];
+    const food_in_view: Food[] = [];
     
     for (let other of inhabitants) {
         if (other !== fish) {
@@ -81,7 +114,20 @@ export function scanEnvironment(fish: Fish, inhabitants: Inhabitant[]): {
             }
         }
     }
-    return { fish_in_view, fish_by_lateral_line, microfauna_in_view };
+
+    // Check food particles
+    for (let foodParticle of food) {
+        if (isTargetInFieldOfView(fish, foodParticle, 45, 300)) {
+            // 10% chance of seeing food if not settled, 0.1% if settled
+            const detectionProbability = foodParticle.settled ? 0.001 : 0.1;
+            
+            if (Math.random() < detectionProbability) {
+                food_in_view.push(foodParticle);
+            }
+        }
+    }
+    
+    return { fish_in_view, fish_by_lateral_line, microfauna_in_view, food_in_view };
 }
 
 /**
@@ -251,7 +297,7 @@ function generateConstrainedRandomVector(range: number): Vector {
 /**
  * Handles movement for a fish in hunger mode
  */
-export function handleHungerMovement(fish: Fish, microfauna_in_view: Inhabitant[]): void {
+export function handleHungerMovement(fish: Fish, microfauna_in_view: Inhabitant[], food_in_view: Food[]): void {
     // If fish is currently eating, just drift
     if (fish.isEating()) {
         return;
@@ -264,7 +310,7 @@ export function handleHungerMovement(fish: Fish, microfauna_in_view: Inhabitant[
             const randomForce = generateConstrainedRandomVector(0.1);
             applyMovement(fish, randomForce);
         }
-        const nearestFood = findNearestFood(fish, microfauna_in_view);
+        const nearestFood = findNearestFood(fish, microfauna_in_view, food_in_view);
         if (nearestFood) {
             fish.setHungerTarget(nearestFood);
         } else {
@@ -278,18 +324,38 @@ export function handleHungerMovement(fish: Fish, microfauna_in_view: Inhabitant[
     let shouldEndStrike = false;
 
     // Check if target is valid and in tank
-    if (!target || !(target instanceof Microfauna && target.tank)) {
+    if (!target) {
         shouldEndStrike = true;
-    } else {
-        const index = target.tank.microfauna.indexOf(target);
-        if (index === -1) {
+    } else if (target instanceof Microfauna) {
+        if (!target.tank) {
             shouldEndStrike = true;
         } else {
-            // Check if target is out of sight with 0.1 chance to end strike
-            if (!fish.isInFieldOfView(target as Inhabitant, 45, 300) && Math.random() < 0.1) {
+            const index = target.tank.microfauna.indexOf(target);
+            if (index === -1) {
                 shouldEndStrike = true;
+            } else {
+                // Check if target is out of sight with 0.1 chance to end strike
+                if (!isTargetInFieldOfView(fish, target, 45, 300) && Math.random() < 0.1) {
+                    shouldEndStrike = true;
+                }
             }
         }
+    } else if (target instanceof Food) {
+        if (!target.tank) {
+            shouldEndStrike = true;
+        } else {
+            const index = target.tank.food.indexOf(target);
+            if (index === -1) {
+                shouldEndStrike = true;
+            } else {
+                // Check if target is out of sight with 0.1 chance to end strike
+                if (!isTargetInFieldOfView(fish, target, 45, 300) && Math.random() < 0.1) {
+                    shouldEndStrike = true;
+                }
+            }
+        }
+    } else {
+        shouldEndStrike = true;
     }
 
     if (shouldEndStrike) {
@@ -297,13 +363,13 @@ export function handleHungerMovement(fish: Fish, microfauna_in_view: Inhabitant[
         return;
     }
 
-    // Calculate direction and distance to target
-    const direction = (target as Inhabitant).position.value.subtract(fish.position.value);
+    // At this point, target is guaranteed to be non-null
+    const direction = target.position.value.subtract(fish.position.value);
     const distance = direction.magnitude();
 
     // If not in strike mode and within striking distance, start strike
     if (!fish.isInStrike() && distance < 100) {
-        fish.startStrike(target as Inhabitant);
+        fish.startStrike(target);
     }
 
     // Handle movement based on whether we're in strike mode
@@ -320,9 +386,9 @@ export function handleHungerMovement(fish: Fish, microfauna_in_view: Inhabitant[
     }
 
     // Check if caught the target
-    if (distance < 20) {
+    if (distance < 10) {
         fish.endStrike();
-        fish.decreaseHunger(0.3);
+        fish.decreaseHunger(0.1);
         fish.startEating();
         
         // Remove the target from the tank
@@ -331,6 +397,11 @@ export function handleHungerMovement(fish: Fish, microfauna_in_view: Inhabitant[
             if (index > -1) {
                 target.tank.microfauna.splice(index, 1);
             }
+        } else if (target instanceof Food && target.tank) {
+            const index = target.tank.food.indexOf(target);
+            if (index > -1) {
+                target.tank.food.splice(index, 1);
+            }
         }
     }
 }
@@ -338,18 +409,28 @@ export function handleHungerMovement(fish: Fish, microfauna_in_view: Inhabitant[
 /**
  * Finds the nearest food source within the fish's field of view
  */
-function findNearestFood(fish: Fish, fish_in_view: Inhabitant[]): Inhabitant | null {
-    let nearest: Inhabitant | null = null;
+function findNearestFood(fish: Fish, microfauna_in_view: Inhabitant[], food_in_view: Food[]): Inhabitant | Food | null {
+    let nearest: Inhabitant | Food | null = null;
     let minDistance = Infinity;
     const HUNT_RADIUS = 200; // Maximum distance to detect food
 
-    for (const inhabitant of fish_in_view) {
+    // Check microfauna
+    for (const inhabitant of microfauna_in_view) {
         if (inhabitant.constructor.name === 'Microfauna') {
             const distance = fish.distanceTo(inhabitant);
             if (distance < HUNT_RADIUS && distance < minDistance) {
                 nearest = inhabitant;
                 minDistance = distance;
             }
+        }
+    }
+
+    // Check food particles
+    for (const foodParticle of food_in_view) {
+        const distance = distanceToTarget(fish, foodParticle);
+        if (distance < HUNT_RADIUS && distance < minDistance) {
+            nearest = foodParticle;
+            minDistance = distance;
         }
     }
 

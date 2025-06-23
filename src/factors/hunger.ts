@@ -1,10 +1,11 @@
 import { Factor } from './factor.js';
 import { Inhabitant } from '../inhabitants/inhabitant.js';
+import { Food } from '../inhabitants/food.js';
 
 export class Hunger extends Factor<number> {
     private increaseRate: number;
     public inStrike: boolean;
-    public target: Inhabitant | null;
+    public target: Inhabitant | Food | null;
     public isEating: number;
     public feeding: boolean;
 
@@ -33,7 +34,7 @@ export class Hunger extends Factor<number> {
         }
     }
 
-    startStrike(target: Inhabitant): void {
+    startStrike(target: Inhabitant | Food): void {
         this.inStrike = true;
         this.target = target;
     }
@@ -55,21 +56,21 @@ export class Hunger extends Factor<number> {
         return this.feeding;
     }
 
-    updateFeedingMode(microfauna_in_view: Inhabitant[]): void {
+    updateFeedingMode(food_in_view: (Inhabitant | Food)[]): void {
         const currentHunger = this.value;
-        const hasMicrofaunaInSight = microfauna_in_view.length > 0;
+        const hasFoodInSight = food_in_view.length > 0;
         
         if (!this.feeding) {
             // Not currently in feeding mode - check if we should enter
             let probability = 0;
             
-            if (hasMicrofaunaInSight) {
-                // If microfauna in sight: enter feeding mode with probability = current hunger (only if hunger > 0.1)
+            if (hasFoodInSight) {
+                // If food in sight: enter feeding mode with probability = current hunger (only if hunger > 0.1)
                 if (currentHunger > 0.1) {
                     probability = currentHunger / 10;
                 }
             } else {
-                // If no microfauna in sight: enter feeding mode with probability = current hunger / 100 (only if hunger > 0.5)
+                // If no food in sight: enter feeding mode with probability = current hunger / 100 (only if hunger > 0.5)
                 if (currentHunger > 0.5) {
                     probability = currentHunger / 200;
                 }
@@ -80,14 +81,14 @@ export class Hunger extends Factor<number> {
             }
         } else {
             // Currently in feeding mode - check if we should leave
-            if (!hasMicrofaunaInSight) {
-                // If no microfauna in sight: leave feeding mode with probability = (1-hunger)/100
+            if (!hasFoodInSight) {
+                // If no food in sight: leave feeding mode with probability = (1-hunger)/100
                 const probability = (1 - currentHunger) / 100;
                 if (Math.random() < probability) {
                     this.feeding = false;
                 }
             }
-            // If microfauna in sight, stay in feeding mode
+            // If food in sight, stay in feeding mode
         }
     }
 
@@ -95,7 +96,7 @@ export class Hunger extends Factor<number> {
         this.feeding = false;
     }
 
-    setTarget(target: Inhabitant | null): void {
+    setTarget(target: Inhabitant | Food | null): void {
         this.target = target;
     }
 } 

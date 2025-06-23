@@ -113,8 +113,10 @@ export class Fish extends Inhabitant {
                 return;
             }
         }
-        // Scan environment first to get fish_by_lateral_line
-        const { fish_in_view, fish_by_lateral_line, microfauna_in_view } = behavior.scanEnvironment(this, inhabitants);
+        // Get tank reference for food particles
+        const tank = this.getTank(inhabitants);
+        // Scan environment first to get fish_by_lateral_line and food
+        const { fish_in_view, fish_by_lateral_line, microfauna_in_view, food_in_view } = behavior.scanEnvironment(this, inhabitants, tank ? tank.food : []);
         // Update factors with fish_by_lateral_line for splash detection
         behavior.updateFactors(this, fish_by_lateral_line);
         // Handle movement based on fear level and feeding mode
@@ -125,15 +127,24 @@ export class Fish extends Inhabitant {
         }
         else {
             // Update feeding mode based on the new logic
-            this.hunger.updateFeedingMode(microfauna_in_view);
+            this.hunger.updateFeedingMode([...microfauna_in_view, ...food_in_view]);
             if (this.isInFeedingMode()) {
-                behavior.handleHungerMovement(this, microfauna_in_view);
+                behavior.handleHungerMovement(this, microfauna_in_view, food_in_view);
             }
             else {
                 behavior.handleNormalMovement(this, fish_in_view, fish_by_lateral_line);
             }
         }
         super.update(inhabitants);
+    }
+    // Helper method to get tank reference from inhabitants
+    getTank(inhabitants) {
+        for (const inhabitant of inhabitants) {
+            if ('tank' in inhabitant && inhabitant.tank) {
+                return inhabitant.tank;
+            }
+        }
+        return null;
     }
     getVerticalTilt() {
         const delta = this.position.delta;

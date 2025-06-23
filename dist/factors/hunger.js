@@ -37,20 +37,20 @@ export class Hunger extends Factor {
     isFeeding() {
         return this.feeding;
     }
-    updateFeedingMode(microfauna_in_view) {
+    updateFeedingMode(food_in_view) {
         const currentHunger = this.value;
-        const hasMicrofaunaInSight = microfauna_in_view.length > 0;
+        const hasFoodInSight = food_in_view.length > 0;
         if (!this.feeding) {
             // Not currently in feeding mode - check if we should enter
             let probability = 0;
-            if (hasMicrofaunaInSight) {
-                // If microfauna in sight: enter feeding mode with probability = current hunger (only if hunger > 0.1)
+            if (hasFoodInSight) {
+                // If food in sight: enter feeding mode with probability = current hunger (only if hunger > 0.1)
                 if (currentHunger > 0.1) {
                     probability = currentHunger / 10;
                 }
             }
             else {
-                // If no microfauna in sight: enter feeding mode with probability = current hunger / 100 (only if hunger > 0.5)
+                // If no food in sight: enter feeding mode with probability = current hunger / 100 (only if hunger > 0.5)
                 if (currentHunger > 0.5) {
                     probability = currentHunger / 200;
                 }
@@ -61,14 +61,14 @@ export class Hunger extends Factor {
         }
         else {
             // Currently in feeding mode - check if we should leave
-            if (!hasMicrofaunaInSight) {
-                // If no microfauna in sight: leave feeding mode with probability = (1-hunger)/100
+            if (!hasFoodInSight) {
+                // If no food in sight: leave feeding mode with probability = (1-hunger)/100
                 const probability = (1 - currentHunger) / 100;
                 if (Math.random() < probability) {
                     this.feeding = false;
                 }
             }
-            // If microfauna in sight, stay in feeding mode
+            // If food in sight, stay in feeding mode
         }
     }
     exitFeedingDueToFear() {

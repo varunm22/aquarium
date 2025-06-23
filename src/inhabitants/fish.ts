@@ -7,6 +7,7 @@ import { Fear } from '../factors/fear.js';
 import { Hunger } from '../factors/hunger.js';
 import { getTankBounds } from '../constants.js';
 import * as behavior from './behavior.js';
+import { Food } from './food.js';
 
 // Declare p5.js global functions
 declare function loadImage(path: string): p5.Image;
@@ -126,11 +127,11 @@ export abstract class Fish extends Inhabitant {
         return this.hunger.inStrike;
     }
 
-    public getStrikeTarget(): Inhabitant | null {
+    public getStrikeTarget(): Inhabitant | Food | null {
         return this.hunger.target;
     }
 
-    public startStrike(target: Inhabitant): void {
+    public startStrike(target: Inhabitant | Food): void {
         this.hunger.startStrike(target);
     }
 
@@ -146,7 +147,7 @@ export abstract class Fish extends Inhabitant {
         this.hunger.startEating();
     }
 
-    public setHungerTarget(target: Inhabitant | null): void {
+    public setHungerTarget(target: Inhabitant | Food | null): void {
         this.hunger.setTarget(target);
     }
 
@@ -175,8 +176,11 @@ export abstract class Fish extends Inhabitant {
             }
         }
 
-        // Scan environment first to get fish_by_lateral_line
-        const { fish_in_view, fish_by_lateral_line, microfauna_in_view } = behavior.scanEnvironment(this, inhabitants);
+        // Get tank reference for food particles
+        const tank = this.getTank(inhabitants);
+
+        // Scan environment first to get fish_by_lateral_line and food
+        const { fish_in_view, fish_by_lateral_line, microfauna_in_view, food_in_view } = behavior.scanEnvironment(this, inhabitants, tank ? tank.food : []);
 
         // Update factors with fish_by_lateral_line for splash detection
         behavior.updateFactors(this, fish_by_lateral_line);
@@ -188,16 +192,26 @@ export abstract class Fish extends Inhabitant {
             behavior.handleFearMovement(this, fish_in_view, fish_by_lateral_line);
         } else {
             // Update feeding mode based on the new logic
-            this.hunger.updateFeedingMode(microfauna_in_view);
+            this.hunger.updateFeedingMode([...microfauna_in_view, ...food_in_view]);
             
             if (this.isInFeedingMode()) {
-                behavior.handleHungerMovement(this, microfauna_in_view);
+                behavior.handleHungerMovement(this, microfauna_in_view, food_in_view);
             } else {
                 behavior.handleNormalMovement(this, fish_in_view, fish_by_lateral_line);
             }
         }
 
         super.update(inhabitants);
+    }
+
+    // Helper method to get tank reference from inhabitants
+    private getTank(inhabitants: Inhabitant[]): Tank | null {
+        for (const inhabitant of inhabitants) {
+            if ('tank' in inhabitant && inhabitant.tank) {
+                return inhabitant.tank as Tank;
+            }
+        }
+        return null;
     }
 
     protected getVerticalTilt(): number {

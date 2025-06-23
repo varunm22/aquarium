@@ -1,5 +1,6 @@
 import { TANK_CONSTANTS } from './constants.js';
 import { Microfauna } from './inhabitants/microfauna.js';
+import { Food } from './inhabitants/food.js';
 import { Position } from './factors/position.js';
 import { Vector } from './vector.js';
 export class Tank {
@@ -25,6 +26,7 @@ export class Tank {
         this.gravelFront = loadImage('assets/gravel-front.png');
         this.gravelHeight = TANK_CONSTANTS.GRAVEL_HEIGHT;
         this.microfauna = [];
+        this.food = []; // Initialize food array
         // Initialize 10 microfauna in random positions in bottom 100 pixels
         for (let i = 0; i < 10; i++) {
             const x = Math.random() * this.width + this.x;
@@ -42,16 +44,30 @@ export class Tank {
     addMicrofauna(microfauna) {
         this.microfauna.push(microfauna);
     }
+    addFood(food) {
+        food.setTank(this);
+        this.food.push(food);
+    }
+    // Add food particle at random position above tank
+    dropFood() {
+        const x = random(this.x, this.x + this.width);
+        const y = this.y - random(20, 50); // Random height between 20-50 pixels above tank
+        const z = random(20, this.depth);
+        const food = new Food(x, y, z);
+        this.addFood(food);
+    }
     update() {
-        // Combine all inhabitants for updates
+        // Update all inhabitants
         const allInhabitants = [...this.fish, ...this.microfauna];
-        // Update all fish in the tank
         for (let fish of this.fish) {
             fish.update(allInhabitants);
         }
-        // Update all microfauna
-        for (let micro of this.microfauna) {
-            micro.update(allInhabitants);
+        for (let microfauna of this.microfauna) {
+            microfauna.update(allInhabitants);
+        }
+        // Update food particles
+        for (let food of this.food) {
+            food.update();
         }
     }
     render() {
@@ -59,17 +75,25 @@ export class Tank {
         this.fish.sort((a, b) => b.position.z - a.position.z);
         // Sort microfauna by depth
         this.microfauna.sort((a, b) => b.position.z - a.position.z);
+        // Sort food by depth
+        this.food.sort((a, b) => b.position.z - a.position.z);
         // Render back pane (before any water layers)
         this.renderBack();
         // Render gravel
         this.renderGravel();
-        // Combine fish and microfauna for rendering
+        // Combine all objects for rendering
         const allInhabitants = [...this.fish, ...this.microfauna];
         allInhabitants.sort((a, b) => b.position.z - a.position.z);
         // Render inhabitants behind the first water layer (z > this.depth, at the absolute back)
         for (let inhabitant of allInhabitants) {
             if (inhabitant.position.z >= this.depth) {
                 inhabitant.render(this, color(0, 0, 0));
+            }
+        }
+        // Render food behind the first water layer
+        for (let food of this.food) {
+            if (food.position.z >= this.depth) {
+                food.render(this);
             }
         }
         // Render water layers from back to front
@@ -82,6 +106,12 @@ export class Tank {
             for (let inhabitant of allInhabitants) {
                 if (inhabitant.position.z >= layerZStart && inhabitant.position.z < layerZEnd) {
                     inhabitant.render(this, color(0, 0, 0));
+                }
+            }
+            // Render food that falls within this layer
+            for (let food of this.food) {
+                if (food.position.z >= layerZStart && food.position.z < layerZEnd) {
+                    food.render(this);
                 }
             }
             // Render the water layer itself
@@ -98,6 +128,12 @@ export class Tank {
         for (let inhabitant of allInhabitants) {
             if (inhabitant.position.z < 0) {
                 inhabitant.render(this, color(173, 216, 230));
+            }
+        }
+        // Render food in front of the last water layer
+        for (let food of this.food) {
+            if (food.position.z < 0) {
+                food.render(this);
             }
         }
         // Render front pane (after all water layers and inhabitants)

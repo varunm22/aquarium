@@ -1,6 +1,7 @@
 import { Inhabitant } from './inhabitants/inhabitant.js';
 import { TANK_CONSTANTS } from './constants.js';
 import { Microfauna } from './inhabitants/microfauna.js';
+import { Food } from './inhabitants/food.js';
 import { Position } from './factors/position.js';
 import { Vector } from './vector.js';
 
@@ -19,6 +20,7 @@ declare function image(img: HTMLImageElement, x: number, y: number, w: number, h
 declare function push(): void;
 declare function pop(): void;
 declare function loadImage(path: string): HTMLImageElement;
+declare function random(min: number, max: number): number;
 
 
 // Declare p5.Color type
@@ -51,6 +53,7 @@ export class Tank {
     gravelFront: HTMLImageElement | null; // Reference to the gravel texture image for front
     gravelHeight: number;
     microfauna: Inhabitant[]; // Array to store microfauna objects
+    food: Food[]; // Array to store food particles
 
     constructor(x: number, y: number, width: number, height: number, depth: number) {
         // Use constants for initialization
@@ -77,6 +80,7 @@ export class Tank {
         this.gravelFront = loadImage('assets/gravel-front.png');
         this.gravelHeight = TANK_CONSTANTS.GRAVEL_HEIGHT;
         this.microfauna = [];
+        this.food = []; // Initialize food array
         
         // Initialize 10 microfauna in random positions in bottom 100 pixels
         for (let i = 0; i < 10; i++) {
@@ -94,22 +98,40 @@ export class Tank {
         this.fish.push(fish);
     }
 
-    addMicrofauna(microfauna: Inhabitant): void {
-      this.microfauna.push(microfauna);
+    addMicrofauna(microfauna: Microfauna): void {
+        this.microfauna.push(microfauna);
+    }
+
+    addFood(food: Food): void {
+        food.setTank(this);
+        this.food.push(food);
+    }
+
+    // Add food particle at random position above tank
+    dropFood(): void {
+        const x = random(this.x, this.x + this.width);
+        const y = this.y - random(20, 50); // Random height between 20-50 pixels above tank
+        const z = random(20, this.depth);
+        const food = new Food(x, y, z);
+        this.addFood(food);
     }
   
     update(): void {
-      // Combine all inhabitants for updates
-      const allInhabitants = [...this.fish, ...this.microfauna];
-      
-      // Update all fish in the tank
-      for (let fish of this.fish) {
-        fish.update(allInhabitants);
-      }
-      // Update all microfauna
-      for (let micro of this.microfauna) {
-        micro.update(allInhabitants);
-      }
+        // Update all inhabitants
+        const allInhabitants = [...this.fish, ...this.microfauna];
+        
+        for (let fish of this.fish) {
+            fish.update(allInhabitants);
+        }
+        
+        for (let microfauna of this.microfauna) {
+            microfauna.update(allInhabitants);
+        }
+
+        // Update food particles
+        for (let food of this.food) {
+            food.update();
+        }
     }
 
     render(): void {
@@ -117,6 +139,8 @@ export class Tank {
       this.fish.sort((a, b) => b.position.z - a.position.z);
       // Sort microfauna by depth
       this.microfauna.sort((a, b) => b.position.z - a.position.z);
+      // Sort food by depth
+      this.food.sort((a, b) => b.position.z - a.position.z);
     
       // Render back pane (before any water layers)
       this.renderBack();
@@ -124,7 +148,7 @@ export class Tank {
       // Render gravel
       this.renderGravel();
 
-      // Combine fish and microfauna for rendering
+      // Combine all objects for rendering
       const allInhabitants = [...this.fish, ...this.microfauna];
       allInhabitants.sort((a, b) => b.position.z - a.position.z);
    
@@ -132,6 +156,13 @@ export class Tank {
       for (let inhabitant of allInhabitants) {
         if (inhabitant.position.z >= this.depth) {
           inhabitant.render(this, color(0, 0, 0));
+        }
+      }
+
+      // Render food behind the first water layer
+      for (let food of this.food) {
+        if (food.position.z >= this.depth) {
+          food.render(this);
         }
       }
     
@@ -147,6 +178,13 @@ export class Tank {
         for (let inhabitant of allInhabitants) {
           if (inhabitant.position.z >= layerZStart && inhabitant.position.z < layerZEnd) {
             inhabitant.render(this, color(0, 0, 0));
+          }
+        }
+
+        // Render food that falls within this layer
+        for (let food of this.food) {
+          if (food.position.z >= layerZStart && food.position.z < layerZEnd) {
+            food.render(this);
           }
         }
     
@@ -166,6 +204,13 @@ export class Tank {
       for (let inhabitant of allInhabitants) {
         if (inhabitant.position.z < 0) {
           inhabitant.render(this, color(173, 216, 230));
+        }
+      }
+
+      // Render food in front of the last water layer
+      for (let food of this.food) {
+        if (food.position.z < 0) {
+          food.render(this);
         }
       }
     

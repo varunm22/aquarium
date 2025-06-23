@@ -42,14 +42,15 @@ export class SidePane {
     private padding: number;
     private scrollOffset: number;
     private maxScroll: number;
-    private selectedView: 'fish' | 'chem' = 'fish';
+    private selectedView: 'fish' | 'chem' | 'actions' = 'fish';
     private tank: Tank;
     private headerHeight: number = 40;
     private footerHeight: number = 40;
     private mouseWasPressed: boolean = false;
-    private readonly tabs: { id: 'fish' | 'chem', label: string }[] = [
+    private readonly tabs: { id: 'fish' | 'chem' | 'actions', label: string }[] = [
         { id: 'fish', label: 'fish' },
-        { id: 'chem', label: 'chem' }
+        { id: 'chem', label: 'chem' },
+        { id: 'actions', label: 'actions' }
     ];
 
     constructor(tank: Tank) {
@@ -139,8 +140,10 @@ export class SidePane {
         // Draw the content first
         if (this.selectedView === 'fish') {
             this.renderFishView(tank);
-        } else {
+        } else if (this.selectedView === 'chem') {
             this.renderChemView();
+        } else if (this.selectedView === 'actions') {
+            this.renderActionsView();
         }
 
         // Draw the masking frame
@@ -245,6 +248,45 @@ export class SidePane {
         textSize(12);
         textAlign(LEFT, CENTER);
         text('Coming soon', this.x + this.padding, rowY + this.rowHeight/2);
+    }
+
+    private renderActionsView(): void {
+        const buttonY = this.y + this.headerHeight + this.padding;
+        const buttonWidth = this.width - (this.padding * 2);
+        const buttonHeight = 40;
+        
+        // Draw feed button
+        fill(100, 150, 255); // Blue
+        stroke(50, 100, 200); // Darker blue border
+        strokeWeight(1);
+        rect(this.x + this.padding, buttonY, buttonWidth, buttonHeight);
+        
+        // Draw button text
+        fill(255, 255, 255); // White text
+        noStroke();
+        textSize(14);
+        textAlign(CENTER, CENTER);
+        text('Feed', this.x + this.padding + buttonWidth/2, buttonY + buttonHeight/2);
+        
+        // Handle feed button click
+        if (this.mouseWasPressed && !mouseIsPressed) {
+            if (mouseX >= this.x + this.padding && mouseX <= this.x + this.padding + buttonWidth &&
+                mouseY >= buttonY && mouseY <= buttonY + buttonHeight) {
+                this.handleFeedAction();
+            }
+        }
+    }
+
+    private handleFeedAction(): void {
+        // Drop 3-5 food particles when feeding
+        const numPellets = Math.floor(Math.random() * 3) + 3; // 3-5 pellets
+        for (let i = 0; i < numPellets; i++) {
+            // Stagger the drops slightly for a more natural look
+            setTimeout(() => {
+                this.tank.dropFood();
+            }, i * 100); // 100ms delay between each pellet
+        }
+        console.log(`Dropped ${numPellets} food pellets!`);
     }
 
     private drawMaskingFrame(tank: Tank): void {
