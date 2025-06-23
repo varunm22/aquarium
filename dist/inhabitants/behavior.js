@@ -103,8 +103,16 @@ export function scanEnvironment(fish, inhabitants, food) {
     // Check food particles
     for (let foodParticle of food) {
         if (isTargetInFieldOfView(fish, foodParticle, 45, 300)) {
-            // 10% chance of seeing food if not settled, 0.1% if settled
-            const detectionProbability = foodParticle.settled ? 0.001 : 0.1;
+            let detectionProbability;
+            if (foodParticle.settled) {
+                detectionProbability = 0.001; // 0.1% chance for settled food
+            }
+            else if (foodParticle.floating) {
+                detectionProbability = 0.01; // 1% chance for floating food
+            }
+            else {
+                detectionProbability = 0.1; // 10% chance for sinking food
+            }
             if (Math.random() < detectionProbability) {
                 food_in_view.push(foodParticle);
             }
@@ -308,7 +316,11 @@ export function handleHungerMovement(fish, microfauna_in_view, food_in_view) {
         fish.endStrike();
         return;
     }
-    // At this point, target is guaranteed to be non-null
+    // At this point, target is guaranteed to be non-null due to the checks above
+    if (!target) {
+        fish.endStrike();
+        return;
+    }
     const direction = target.position.value.subtract(fish.position.value);
     const distance = direction.magnitude();
     // If not in strike mode and within striking distance, start strike
@@ -331,7 +343,7 @@ export function handleHungerMovement(fish, microfauna_in_view, food_in_view) {
     // Check if caught the target
     if (distance < 10) {
         fish.endStrike();
-        fish.decreaseHunger(0.2);
+        fish.decreaseHunger(0.1);
         fish.startEating();
         // Remove the target from the tank
         if (target instanceof Microfauna && target.tank) {

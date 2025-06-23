@@ -62,7 +62,7 @@ export class Microfauna extends Inhabitant {
 }
 Microfauna.MAX_NEARBY = 20;
 Microfauna.MAX_DISTANCE = 100;
-Microfauna.BASE_REPRODUCTION_CHANCE = 0.005;
+Microfauna.BASE_REPRODUCTION_CHANCE = 0.004;
 // Growth properties (size is inherited from Inhabitant)
 Microfauna.GROWTH_CHANCE = 0.01;
 Microfauna.GROWTH_AMOUNT = 0.1;

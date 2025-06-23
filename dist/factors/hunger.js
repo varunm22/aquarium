@@ -11,7 +11,7 @@ export class Hunger extends Factor {
     update() {
         super.update();
         // Randomly increase hunger at a slow rate
-        this.increaseRate = Math.random() * 0.0005;
+        this.increaseRate = Math.random() * 0.0003;
         this.value = Math.min(1, this.value + this.increaseRate);
         // Constrain hunger to reasonable bounds
         this.value = Math.max(0, Math.min(this.value, 1));
@@ -29,7 +29,7 @@ export class Hunger extends Factor {
         this.target = null;
     }
     startEating() {
-        this.isEating = 30;
+        this.isEating = 10;
     }
     setFeeding(feeding) {
         this.feeding = feeding;

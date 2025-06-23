@@ -6,8 +6,9 @@ export class Food {
         this.tank = null;
         // Start above the water with no initial velocity
         this.position = new Position(new Vector(x, y, z), new Vector(0, 0, 0), false); // false = no constraints initially
-        this.size = 2.5;
+        this.size = 3;
         this.inWater = false;
+        this.floating = false; // Start not floating
         this.settled = false; // Start unsettled
     }
     setTank(tank) {
@@ -25,28 +26,35 @@ export class Food {
             const bounds = getTankBounds();
             if (this.position.y >= bounds.min.y) {
                 this.inWater = true;
+                this.floating = true; // Start floating when hitting water
                 this.position.setShouldConstrain(true); // Enable constraints when entering water
-                this.position.delta.y *= 0.2; // Slow down when entering water
-                // Add small random horizontal drift when hitting water
-                const horizontalDrift = Vector.random(-0.5, 0.5);
-                horizontalDrift.y = 0; // Only horizontal drift
-                this.position.applyAcceleration(horizontalDrift, 5); // Apply drift for 5 frames
+                // Stop all movement when starting to float
+                this.position.delta = Vector.zero();
+                this.position.ddelta = Vector.zero();
             }
+        }
+        else if (this.floating) {
+            // While floating, 1% chance per frame to start sinking
+            if (Math.random() < 0.004) {
+                this.floating = false;
+            }
+            // Don't apply any downward acceleration while floating
         }
         else {
-            // In water - continue sinking with reduced gravity
-            this.position.delta.y += Math.random() * 0.03; // Smaller downward acceleration in water
-            // Add small random horizontal drift occasionally
-            if (Math.random() < 0.05) { // 5% chance each frame
+            // In water and not floating - continue sinking with reduced gravity
+            this.position.delta.y += 0.02;
+            // Add small random drift occasionally
+            if (Math.random() < 0.25) { // 25% chance each frame
                 const drift = Vector.random(-0.1, 0.1);
-                drift.y = 0; // Only horizontal drift
-                this.position.applyAcceleration(drift, 3);
+                this.position.applyAcceleration(drift, 2);
             }
         }
-        // Update position
-        this.position.update();
+        // Update position (only if not floating, since floating food should stay put)
+        if (!this.floating) {
+            this.position.update();
+        }
         // Check if food has reached the bottom and should settle
-        if (this.isAtBottom()) {
+        if (!this.floating && this.isAtBottom()) {
             this.settled = true;
             // Stop all movement
             this.position.delta = Vector.zero();
@@ -68,6 +76,6 @@ export class Food {
     // Check if food has reached the bottom
     isAtBottom() {
         const bounds = getTankBounds();
-        return this.position.y >= bounds.max.y - 5; // Within 5 units of the bottom
+        return this.position.y >= bounds.max.y - 2; // Within 2 units of the bottom
     }
 }

@@ -107,11 +107,25 @@ export class Tank {
         this.food.push(food);
     }
 
-    // Add food particle at random position above tank
-    dropFood(): void {
-        const x = random(this.x, this.x + this.width);
+    // Add food particle at random position above tank, or at specified feeding spot
+    dropFood(feedingX?: number, feedingZ?: number): void {
+        let x: number, z: number;
+        
+        if (feedingX !== undefined && feedingZ !== undefined) {
+            // Drop near the specified feeding spot with some randomness
+            x = feedingX + random(-50, 50);
+            z = feedingZ + random(-50, 50);
+            
+            // Constrain to tank bounds
+            x = Math.max(this.x, Math.min(this.x + this.width, x));
+            z = Math.max(20, Math.min(this.depth, z));
+        } else {
+            // Original random behavior for single drops
+            x = random(this.x, this.x + this.width);
+            z = random(20, this.depth);
+        }
+        
         const y = this.y - random(20, 50); // Random height between 20-50 pixels above tank
-        const z = random(20, this.depth);
         const food = new Food(x, y, z);
         this.addFood(food);
     }

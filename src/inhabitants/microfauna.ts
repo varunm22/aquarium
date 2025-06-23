@@ -7,7 +7,7 @@ export class Microfauna extends Inhabitant {
     public tank: Tank | null = null;
     private static readonly MAX_NEARBY = 20;
     private static readonly MAX_DISTANCE = 100;
-    private static readonly BASE_REPRODUCTION_CHANCE = 0.005;
+    private static readonly BASE_REPRODUCTION_CHANCE = 0.004;
     
     // Growth properties (size is inherited from Inhabitant)
     private static readonly GROWTH_CHANCE = 0.01;

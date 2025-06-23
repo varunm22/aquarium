@@ -206,15 +206,18 @@ export class SidePane {
         }
     }
     handleFeedAction() {
-        // Drop 3-5 food particles when feeding
-        const numPellets = Math.floor(Math.random() * 3) + 3; // 3-5 pellets
+        // Drop 10-20 food particles when feeding
+        const numPellets = Math.floor(Math.random() * 10) + 40; // 40-50 pellets
+        // Pick a feeding spot at least 100 pixels from any tank edge
+        const feedingX = random(this.tank.x + 100, this.tank.x + this.tank.width - 100);
+        const feedingZ = random(120, this.tank.depth - 100); // 120 = 20 (min z) + 100 (buffer)
         for (let i = 0; i < numPellets; i++) {
             // Stagger the drops slightly for a more natural look
             setTimeout(() => {
-                this.tank.dropFood();
-            }, i * 100); // 100ms delay between each pellet
+                this.tank.dropFood(feedingX, feedingZ);
+            }, i * 25); // 100ms delay between each pellet
         }
-        console.log(`Dropped ${numPellets} food pellets!`);
+        console.log(`Dropped ${numPellets} food pellets at feeding spot (${Math.round(feedingX)}, ${Math.round(feedingZ)})!`);
     }
     drawMaskingFrame(tank) {
         push();
