@@ -52,17 +52,17 @@ export class Position extends Factor<Vector> {
      */
     private calculateWallAvoidanceForce(): Vector {
         const bounds = getTankBounds();
-        const avoidanceDistance = 20;
-        const forceMultiplier = 20;
+        const avoidanceDistance = 50;
+        const forceMultiplier = 100;
         let avoidanceForce = Vector.zero();
 
         // Define boundaries: [position, boundaryValue, forceDirection, velocityComponent, movingTowardsCondition]
         const boundaries: [number, number, Vector, number, (vel: number) => boolean][] = [
-            [this.value.x, bounds.min.x, new Vector(1, 0, 0), this.delta.x, (vel) => vel < 0],   // Left wall
-            [this.value.x, bounds.max.x, new Vector(-1, 0, 0), this.delta.x, (vel) => vel > 0],  // Right wall
-            [this.value.y, bounds.max.y, new Vector(0, -1, 0), this.delta.y, (vel) => vel > 0],  // Floor only
-            [this.value.z, bounds.min.z, new Vector(0, 0, 1), this.delta.z, (vel) => vel < 0],   // Back wall
-            [this.value.z, bounds.max.z, new Vector(0, 0, -1), this.delta.z, (vel) => vel > 0]   // Front wall
+            [this.value.x, bounds.min.x, new Vector(1, 0, 0), this.delta.x, (vel) => vel < -0.5],   // Left wall
+            [this.value.x, bounds.max.x, new Vector(-1, 0, 0), this.delta.x, (vel) => vel > 0.5],  // Right wall
+            [this.value.y, bounds.max.y, new Vector(0, -1, 0), this.delta.y, (vel) => vel > 0.5],  // Floor only
+            [this.value.z, bounds.min.z, new Vector(0, 0, 1), this.delta.z, (vel) => vel < -0.5],   // Back wall
+            [this.value.z, bounds.max.z, new Vector(0, 0, -1), this.delta.z, (vel) => vel > 0.5]   // Front wall
         ];
 
         for (const [pos, boundary, direction, velocity, isMovingTowards] of boundaries) {

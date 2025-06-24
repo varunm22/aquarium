@@ -100,7 +100,7 @@ export function scanEnvironment(fish, inhabitants, food) {
             }
         }
     }
-    // Check food particles
+    // Check food particles for visual detection
     for (let foodParticle of food) {
         if (isTargetInFieldOfView(fish, foodParticle, 45, 300)) {
             let detectionProbability;
@@ -118,7 +118,44 @@ export function scanEnvironment(fish, inhabitants, food) {
             }
         }
     }
-    return { fish_in_view, fish_by_lateral_line, microfauna_in_view, food_in_view };
+    // Calculate smelled food direction (separate from visual detection)
+    let smelled_food_direction = null;
+    let totalFoodDirection = Vector.zero();
+    let foodCount = 0;
+    for (let foodParticle of food) {
+        const distance = fish.position.value.distanceTo(foodParticle.position.value);
+        // Base smell strength based on food state
+        let baseSmellStrength = 0;
+        if (foodParticle.settled) {
+            baseSmellStrength = 0.0001; // Very weak smell from settled food
+        }
+        else if (foodParticle.floating) {
+            baseSmellStrength = 0.001; // Moderate smell from floating food
+        }
+        else {
+            baseSmellStrength = 0.10; // Strong smell from sinking food (fresh)
+        }
+        // Distance-based probability: smell detection decreases with distance
+        // Using inverse square law-like falloff but capped to prevent extremely low probabilities
+        const distanceBasedProbability = Math.max(baseSmellStrength / (1 + distance * distance / 10000), baseSmellStrength * 0.01);
+        // Random chance to detect the smell based on distance
+        if (Math.random() < distanceBasedProbability) {
+            const direction = foodParticle.position.value.subtract(fish.position.value);
+            // Weight the direction by the detection strength
+            totalFoodDirection.addInPlace(direction.multiply(distanceBasedProbability));
+            foodCount++;
+        }
+    }
+    // Average the direction if multiple food sources detected
+    if (foodCount > 0) {
+        smelled_food_direction = totalFoodDirection.divide(foodCount);
+        // Normalize to a very gentle magnitude for subtle movement
+        const magnitude = smelled_food_direction.magnitude();
+        if (magnitude > 0) {
+            smelled_food_direction = smelled_food_direction.divide(magnitude).multiply(0.02);
+        }
+    }
+    return { fish_in_view, fish_by_lateral_line, microfauna_in_view, food_in_view, smelled_food_direction };
 }
 /**
  * Applies movement based on the calculated net force and initiative
@@ -254,17 +291,28 @@ export function handleHungerMovement(fish, microfauna_in_view, food_in_view) {
     }
     // If no target, look for nearest food
     if (!fish.getStrikeTarget()) {
-        // Add random movement before searching for food
-        if (Math.random() < 0.1) {
-            const randomForce = generateConstrainedRandomVector(0.1);
-            applyMovement(fish, randomForce);
-        }
         const nearestFood = findNearestFood(fish, microfauna_in_view, food_in_view);
         if (nearestFood) {
             fish.setHungerTarget(nearestFood);
         }
         else {
-            // No food found
+            // No specific food target, but check if we have a general smell direction
+            const smelledDirection = fish.getSmelledFoodDirection();
+            if (smelledDirection) {
+                // Move gently towards the smelled food direction (very subtle influence)
+                applyMovement(fish, smelledDirection, {
+                    forceMultiplier: 2,
+                    movementChance: 0.15,
+                    variance: 0.4 // Add more randomness to make it feel natural
+                });
+            }
+            else {
+                // Add random movement while searching for food
+                if (Math.random() < 0.1) {
+                    const randomForce = generateConstrainedRandomVector(0.1);
+                    applyMovement(fish, randomForce);
+                }
+            }
             return;
         }
     }

@@ -102,6 +102,12 @@ export class Fish extends Inhabitant {
     setFeedingMode(feeding) {
         this.hunger.setFeeding(feeding);
     }
+    getSmelledFoodDirection() {
+        return this.hunger.getSmelledFoodDirection();
+    }
+    setSmelledFoodDirection(direction) {
+        this.hunger.setSmelledFoodDirection(direction);
+    }
     update(inhabitants) {
         // Decrement splash counter if active
         if (this.splash > 0) {
@@ -115,8 +121,10 @@ export class Fish extends Inhabitant {
         }
         // Get tank reference for food particles
         const tank = this.getTank(inhabitants);
-        // Scan environment first to get fish_by_lateral_line and food
-        const { fish_in_view, fish_by_lateral_line, microfauna_in_view, food_in_view } = behavior.scanEnvironment(this, inhabitants, tank ? tank.food : []);
+        // Scan environment first to get fish_by_lateral_line, food, and smell
+        const { fish_in_view, fish_by_lateral_line, microfauna_in_view, food_in_view, smelled_food_direction } = behavior.scanEnvironment(this, inhabitants, tank ? tank.food : []);
+        // Update smelled food direction in hunger
+        this.setSmelledFoodDirection(smelled_food_direction);
         // Update factors with fish_by_lateral_line for splash detection
         behavior.updateFactors(this, fish_by_lateral_line);
         // Handle movement based on fear level and feeding mode
@@ -126,8 +134,9 @@ export class Fish extends Inhabitant {
             behavior.handleFearMovement(this, fish_in_view, fish_by_lateral_line);
         }
         else {
-            // Update feeding mode based on the new logic
-            this.hunger.updateFeedingMode([...microfauna_in_view, ...food_in_view]);
+            // Update feeding mode based on visual food and smell
+            const hasSmellOfFood = smelled_food_direction !== null;
+            this.hunger.updateFeedingMode([...microfauna_in_view, ...food_in_view], hasSmellOfFood);
             if (this.isInFeedingMode()) {
                 behavior.handleHungerMovement(this, microfauna_in_view, food_in_view);
             }
