@@ -45,7 +45,7 @@ export class EmberTetra extends Fish {
         EmberTetra.spritesheet = loadImage('assets/tetra_small_clear.png');
     }
 
-    render(tank: Tank, color?: p5.Color): void {
+    render(tank: Tank, _color?: p5.Color): void {
         if (!EmberTetra.spritesheet) return;
     
         // Use the same positioning logic as the Inhabitant class

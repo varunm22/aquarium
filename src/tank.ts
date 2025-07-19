@@ -2,6 +2,7 @@ import { Inhabitant } from './inhabitants/inhabitant.js';
 import { TANK_CONSTANTS } from './constants.js';
 import { Microfauna } from './inhabitants/microfauna.js';
 import { Food } from './inhabitants/food.js';
+import { Algae } from './inhabitants/algae.js';
 import { Position } from './factors/position.js';
 import { Vector } from './vector.js';
 
@@ -53,7 +54,8 @@ export class Tank {
     gravelFront: HTMLImageElement | null; // Reference to the gravel texture image for front
     gravelHeight: number;
     microfauna: Inhabitant[]; // Array to store microfauna objects
-    food: Food[]; // Array to store food particles
+    food: Food[];
+    algae: Algae; // Algae growth system // Array to store food particles
 
     constructor(x: number, y: number, width: number, height: number, depth: number) {
         // Use constants for initialization
@@ -81,6 +83,7 @@ export class Tank {
         this.gravelHeight = TANK_CONSTANTS.GRAVEL_HEIGHT;
         this.microfauna = [];
         this.food = []; // Initialize food array
+        this.algae = new Algae(); // Initialize algae system
         
         // Initialize 10 microfauna in random positions in bottom 100 pixels
         for (let i = 0; i < 10; i++) {
@@ -105,6 +108,13 @@ export class Tank {
     addFood(food: Food): void {
         food.setTank(this);
         this.food.push(food);
+    }
+
+    removeFood(food: Food): void {
+        const index = this.food.indexOf(food);
+        if (index > -1) {
+            this.food.splice(index, 1);
+        }
     }
 
     // Add food particle at random position above tank, or at specified feeding spot
@@ -146,6 +156,9 @@ export class Tank {
         for (let food of this.food) {
             food.update();
         }
+        
+        // Update algae growth
+        this.algae.update();
     }
 
     render(): void {
@@ -158,6 +171,9 @@ export class Tank {
     
       // Render back pane (before any water layers)
       this.renderBack();
+
+      // Render algae on walls
+      this.algae.render(this);
 
       // Render gravel
       this.renderGravel();
@@ -227,6 +243,9 @@ export class Tank {
           food.render(this);
         }
       }
+    
+      // Render front wall algae (after all water layers and inhabitants)
+      this.algae.renderFrontWall(this);
     
       // Render front pane (after all water layers and inhabitants)
       this.renderFront();

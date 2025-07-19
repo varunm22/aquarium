@@ -78,7 +78,6 @@ def make_bg_transparent_bfs(image_path, output_path, threshold):
     image.save(output_path, "PNG")
 
 
-# rescale_image("assets/tetra.png", "assets/tetra_small.png", 110 * 2, 73 * 2)
-make_bg_transparent_bfs(
-    "assets/tetra_small.png", "assets/tetra_small_clear.png", threshold=170
-)
+# rescale_image("assets/snail.png", "assets/snail_small.png", 87 * 2, 60 * 2)
+# rescale_image("assets/snail3.png", "assets/snail3_small.png", 64 * 2, 44 * 2)
+make_bg_transparent_bfs("assets/snail.png", "assets/snail_clear.png", threshold=170)

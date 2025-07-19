@@ -48,7 +48,7 @@ export class Inhabitant {
     return angleDegrees <= maxAngle && distance <= maxDistance;
   }
 
-  update(inhabitants: Inhabitant[] = []): void {
+  update(_inhabitants: Inhabitant[] = []): void {
     // Update position based on velocity
     this.position.update();
   }

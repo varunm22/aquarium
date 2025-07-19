@@ -1,6 +1,7 @@
 import { Tank } from './tank.js';
 import { EmberTetra } from './inhabitants/embertetra.js';
 import { UserFish } from './inhabitants/userfish.js';
+import { Snail } from './inhabitants/snail.js';
 import { SidePane } from './sidepane.js';
 import { getTankBounds } from './constants.js';
 
@@ -8,9 +9,38 @@ import { getTankBounds } from './constants.js';
 declare function createCanvas(w: number, h: number): void;
 declare function background(color: number): void;
 declare function random(min: number, max: number): number;
+declare function fill(r: number, g: number, b: number): void;
+declare function text(str: string, x: number, y: number): void;
+declare function textSize(size: number): void;
 
 let tank: Tank;
 let sidePane: SidePane;
+
+// Debug display system
+class DebugDisplay {
+  private debugInfo: Map<string, string> = new Map();
+  
+  updateInfo(key: string, value: string): void {
+    this.debugInfo.set(key, value);
+  }
+  
+  render(): void {
+    fill(0, 0, 0); // Black text
+    textSize(12);
+    
+    let yOffset = 720; // Start below the tank
+    this.debugInfo.forEach((value, key) => {
+      text(`${key}: ${value}`, 20, yOffset);
+      yOffset += 15;
+    });
+  }
+  
+  clear(): void {
+    this.debugInfo.clear();
+  }
+}
+
+const debugDisplay = new DebugDisplay();
 
 function setup(): void {
   createCanvas(1200, 800); // Increased width to accommodate side pane
@@ -23,6 +53,9 @@ function setup(): void {
 
   // Load the fish spritesheet
   EmberTetra.loadSpritesheet();
+  
+  // Load the snail spritesheet
+  Snail.loadSpritesheet();
 
   // Get tank bounds for proper fish placement
   const bounds = getTankBounds();
@@ -38,8 +71,14 @@ function setup(): void {
   }
 
   // Add the user-controlled fish
-  let userFish = new UserFish(425, 400, 200, 30); // Start in the middle of the tank
-  tank.addFish(userFish); // Add to the tank inhabitants
+  // let userFish = new UserFish(425, 400, 200, 30); // Start in the middle of the tank
+  // tank.addFish(userFish); // Add to the tank inhabitants
+
+  // Add a snail on a random wall
+  for (let i = 0; i < 2; i++) {
+    const snail = new Snail(20); // Pass debug display to snail
+    tank.addFish(snail); // Add to the tank inhabitants
+  }
 }
 
 function draw(): void {
@@ -51,6 +90,9 @@ function draw(): void {
   
   // Render the side pane
   sidePane.render(tank);
+  
+  // Render debug display
+  debugDisplay.render();
 }
 
 // Make setup and draw available to p5.js

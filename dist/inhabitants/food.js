@@ -34,8 +34,8 @@ export class Food {
             }
         }
         else if (this.floating) {
-            // While floating, 1% chance per frame to start sinking
-            if (Math.random() < 0.004) {
+            // While floating, 0.1% chance per frame to start sinking
+            if (Math.random() < 0.001) {
                 this.floating = false;
             }
             // Don't apply any downward acceleration while floating

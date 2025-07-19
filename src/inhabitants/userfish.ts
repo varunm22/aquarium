@@ -31,6 +31,6 @@ export class UserFish extends Inhabitant {
   }
 
   render(tank: Tank): void {
-    super.render(tank, color(0, 0, 0)); // Render as black
+    super.render(tank, color(0, 0, 255)); // Render as blue
   }
 }

@@ -108,7 +108,7 @@ export function scanEnvironment(fish, inhabitants, food) {
                 detectionProbability = 0.001; // 0.1% chance for settled food
             }
             else if (foodParticle.floating) {
-                detectionProbability = 0.01; // 1% chance for floating food
+                detectionProbability = 0.001; // 0.1% chance for floating food
             }
             else {
                 detectionProbability = 0.1; // 10% chance for sinking food
@@ -130,7 +130,7 @@ export function scanEnvironment(fish, inhabitants, food) {
             baseSmellStrength = 0.0001; // Very weak smell from settled food
         }
         else if (foodParticle.floating) {
-            baseSmellStrength = 0.001; // Moderate smell from floating food
+            baseSmellStrength = 0.0001; // Moderate smell from floating food
         }
         else {
             baseSmellStrength = 0.10; // Strong smell from sinking food (fresh)

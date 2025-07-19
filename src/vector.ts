@@ -108,5 +108,19 @@ export class Vector {
     print(): void {
         console.log(`Vector(x: ${this.x}, y: ${this.y}, z: ${this.z})`);
     }
+
+    copy(): Vector {
+        return new Vector(this.x, this.y, this.z);
+    }
+
+    normalize(): this {
+        const len = this.magnitude();
+        if (len > 0) {
+            this.x /= len;
+            this.y /= len;
+            this.z /= len;
+        }
+        return this;
+    }
 }
   

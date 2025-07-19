@@ -31,7 +31,7 @@ export class Microfauna extends Inhabitant {
         // The drop-off is steeper at lower counts
         return Microfauna.BASE_REPRODUCTION_CHANCE / (1 + nearbyCount);
     }
-    update(inhabitants = []) {
+    update(_inhabitants = []) {
         // Update size based on frame count
         this.updateSize();
         // 10% chance of random movement each frame
@@ -47,7 +47,7 @@ export class Microfauna extends Inhabitant {
         }
         // Check for reproduction based on nearby microfauna
         if (this.tank) {
-            const nearbyCount = this.getNearbyMicrofaunaCount(inhabitants);
+            const nearbyCount = this.getNearbyMicrofaunaCount(_inhabitants);
             const reproductionChance = this.calculateReproductionChance(nearbyCount);
             if (Math.random() < reproductionChance) {
                 // Create new microfauna at the same position
@@ -57,7 +57,7 @@ export class Microfauna extends Inhabitant {
                 this.tank.addMicrofauna(newMicrofauna);
             }
         }
-        super.update(inhabitants);
+        super.update(_inhabitants);
     }
 }
 Microfauna.MAX_NEARBY = 20;

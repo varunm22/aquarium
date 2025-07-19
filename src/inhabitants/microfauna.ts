@@ -50,7 +50,7 @@ export class Microfauna extends Inhabitant {
         return Microfauna.BASE_REPRODUCTION_CHANCE / (1 + nearbyCount);
     }
 
-    update(inhabitants: Inhabitant[] = []): void {
+    update(_inhabitants: Inhabitant[] = []): void {
         // Update size based on frame count
         this.updateSize();
 
@@ -71,7 +71,7 @@ export class Microfauna extends Inhabitant {
 
         // Check for reproduction based on nearby microfauna
         if (this.tank) {
-            const nearbyCount = this.getNearbyMicrofaunaCount(inhabitants);
+            const nearbyCount = this.getNearbyMicrofaunaCount(_inhabitants);
             const reproductionChance = this.calculateReproductionChance(nearbyCount);
             
             if (Math.random() < reproductionChance) {
@@ -86,7 +86,7 @@ export class Microfauna extends Inhabitant {
             }
         }
         
-        super.update(inhabitants);
+        super.update(_inhabitants);
     }
 
     // Inheriting default render and update methods from Inhabitant

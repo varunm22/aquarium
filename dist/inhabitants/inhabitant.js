@@ -22,7 +22,7 @@ export class Inhabitant {
         // Return true if the fish is within the angle and distance threshold
         return angleDegrees <= maxAngle && distance <= maxDistance;
     }
-    update(inhabitants = []) {
+    update(_inhabitants = []) {
         // Update position based on velocity
         this.position.update();
     }

@@ -9,7 +9,7 @@ export class EmberTetra extends Fish {
     static loadSpritesheet() {
         EmberTetra.spritesheet = loadImage('assets/tetra_small_clear.png');
     }
-    render(tank, color) {
+    render(tank, _color) {
         if (!EmberTetra.spritesheet)
             return;
         // Use the same positioning logic as the Inhabitant class
