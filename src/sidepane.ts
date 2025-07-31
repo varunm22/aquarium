@@ -3,6 +3,7 @@ import { Inhabitant } from './inhabitants/inhabitant.js';
 import { EmberTetra } from './inhabitants/embertetra.js';
 import { UserFish } from './inhabitants/userfish.js';
 import { Fish } from './inhabitants/fish.js';
+import { Snail } from './inhabitants/snail.js';
 import { getTankBounds } from './constants.js';
 
 // Declare p5.js global functions
@@ -19,6 +20,9 @@ declare function noStroke(): void;
 declare function noFill(): void;
 declare function push(): void;
 declare function pop(): void;
+declare function translate(x: number, y: number): void;
+declare function rotate(angle: number): void;
+declare function scale(x: number, y: number): void;
 declare const mouseIsPressed: boolean;
 declare const mouseX: number;
 declare const mouseY: number;
@@ -27,6 +31,7 @@ declare function random(min: number, max: number): number;
 // p5.js constants
 const CENTER = 'center';
 const LEFT = 'left';
+const RIGHT = 'right';
 
 // Declare p5 namespace
 declare namespace p5 {
@@ -52,6 +57,10 @@ export class SidePane {
         { id: 'chem', label: 'chem' },
         { id: 'actions', label: 'actions' }
     ];
+    
+    // New state for fish view modes
+    private fishViewMode: 'species' | 'individuals' = 'species';
+    private selectedSpecies: 'embertetra' | 'snail' | null = null;
 
     constructor(tank: Tank) {
         this.tank = tank;
@@ -70,8 +79,11 @@ export class SidePane {
 
     private handleScroll(event: WheelEvent): void {
         // Only handle scroll if mouse is over the side pane and fish view is selected
+        const hasFooter = this.selectedView === 'fish' && this.fishViewMode === 'individuals';
+        const footerOffset = hasFooter ? this.footerHeight : 0;
+        
         if (event.clientX >= this.x && event.clientX <= this.x + this.width &&
-            event.clientY >= this.y + this.rowHeight && event.clientY <= this.y + this.height &&
+            event.clientY >= this.y + this.headerHeight && event.clientY <= this.y + this.height - footerOffset &&
             this.selectedView === 'fish') {
             const newOffset = this.scrollOffset + event.deltaY;
             this.scrollOffset = Math.max(0, Math.min(this.maxScroll, newOffset));
@@ -81,27 +93,95 @@ export class SidePane {
 
 
     private addNewFish(): void {
-        const bounds = getTankBounds();
-        const x = random(bounds.min.x, bounds.max.x);
-        const y = -30; // Start above the tank
-        const z = random(bounds.min.z, bounds.max.z);
-        const size = random(20, 30);
-        this.tank.addFish(new EmberTetra(x, y, z, size));
+        // Check if we're in snail view and add appropriate creature
+        if (this.selectedView === 'fish' && this.fishViewMode === 'individuals' && this.selectedSpecies === 'snail') {
+            // Add a new snail
+            const snail = new Snail(20); // Default size for snails
+            this.tank.addFish(snail);
+        } else {
+            // Add a new fish (default behavior)
+            const bounds = getTankBounds();
+            const x = random(bounds.min.x, bounds.max.x);
+            const y = -30; // Start above the tank
+            const z = random(bounds.min.z, bounds.max.z);
+            const size = random(20, 30);
+            this.tank.addFish(new EmberTetra(x, y, z, size));
+        }
     }
 
     private renderFooter(): void {
         const footerY = this.y + this.height - this.footerHeight;
         
-        // Draw footer background
-        fill(220, 240, 255); // Lighter water blue background
-        stroke(150, 190, 210); // Darker water blue border
-        strokeWeight(1);
-        rect(this.x, footerY, this.width, this.footerHeight);
+        if (this.selectedView === 'fish' && this.fishViewMode === 'individuals') {
+            // Show footer with both buttons when in individuals view
+            fill(220, 240, 255); // Lighter water blue background
+            stroke(150, 190, 210); // Darker water blue border
+            strokeWeight(1);
+            rect(this.x, footerY, this.width, this.footerHeight);
+            
+            this.renderBackButton(footerY);
+            this.renderAddNewButton(footerY);
+        }
+        // No footer for species view, chem tab, or actions tab
+    }
 
-        // Add New button
+    private renderBackButton(footerY: number): void {
         const buttonSize = 20;
         const buttonX = this.x + this.padding;
         const buttonY = footerY + (this.footerHeight - buttonSize) / 2;
+
+        // Draw button
+        fill(200, 200, 200); // Gray
+        stroke(150, 150, 150); // Darker gray border
+        strokeWeight(1);
+        rect(buttonX, buttonY, buttonSize, buttonSize);
+
+        // Draw back arrow
+        fill(100, 100, 100);
+        noStroke();
+        textSize(12);
+        textAlign(CENTER, CENTER);
+        text('←', buttonX + buttonSize/2, buttonY + buttonSize/2);
+
+        // Draw text
+        fill(0, 0, 0);
+        textAlign(LEFT, CENTER);
+        text('Back', buttonX + buttonSize + 10, buttonY + buttonSize/2);
+
+        // Handle click release - make sure we're only checking the exact button area
+        if (this.mouseWasPressed && !mouseIsPressed) {
+            const clickX = mouseX;
+            const clickY = mouseY;
+            // Only check if click is within the left half of the footer
+            if (clickX >= buttonX && clickX <= buttonX + buttonSize &&
+                clickY >= buttonY && clickY <= buttonY + buttonSize &&
+                clickX <= this.x + this.width / 2) { // Ensure click is in left half
+                console.log('Back button clicked');
+                this.fishViewMode = 'species';
+                this.selectedSpecies = null;
+                this.scrollOffset = 0; // Reset scroll when going back
+            }
+        }
+    }
+
+    private renderAddNewButton(footerY: number): void {
+        const buttonSize = 20;
+        const buttonY = footerY + (this.footerHeight - buttonSize) / 2;
+        
+        // Position button on right side if in individuals view, left side otherwise
+        const isIndividualsView = this.selectedView === 'fish' && this.fishViewMode === 'individuals';
+        const buttonX = isIndividualsView 
+            ? this.x + this.width - buttonSize - this.padding - 10 // Extra spacing from edge
+            : this.x + this.padding;
+
+        // Draw text first (for individuals view, show text to the left of button)
+        if (isIndividualsView) {
+            fill(0, 0, 0);
+            textAlign(RIGHT, CENTER);
+            // Show appropriate text based on selected species
+            const buttonText = this.selectedSpecies === 'snail' ? 'Add Snail' : 'Add Fish';
+            text(buttonText, buttonX - 15, buttonY + buttonSize/2);
+        }
 
         // Draw button
         fill(100, 200, 100); // Green
@@ -116,15 +196,22 @@ export class SidePane {
         textAlign(CENTER, CENTER);
         text('+', buttonX + buttonSize/2, buttonY + buttonSize/2);
 
-        // Draw text
-        fill(0, 0, 0);
-        textAlign(LEFT, CENTER);
-        text('Add New', buttonX + buttonSize + 10, buttonY + buttonSize/2);
+        // Draw text - only show text if not in individuals view (to save space)
+        if (!isIndividualsView) {
+            fill(0, 0, 0);
+            textAlign(LEFT, CENTER);
+            text('Add New', buttonX + buttonSize + 10, buttonY + buttonSize/2);
+        }
 
-        // Handle click release
+        // Handle click release - make sure we're only checking the exact button area
         if (this.mouseWasPressed && !mouseIsPressed) {
-            if (mouseX >= buttonX && mouseX <= buttonX + buttonSize &&
-                mouseY >= buttonY && mouseY <= buttonY + buttonSize) {
+            const clickX = mouseX;
+            const clickY = mouseY;
+            // Only check if click is within the right half of the footer
+            if (clickX >= buttonX && clickX <= buttonX + buttonSize &&
+                clickY >= buttonY && clickY <= buttonY + buttonSize &&
+                clickX >= this.x + this.width / 2) { // Ensure click is in right half
+                console.log('Add New button clicked');
                 this.addNewFish();
             }
         }
@@ -215,21 +302,35 @@ export class SidePane {
     }
 
     private renderFishView(tank: Tank): void {
-        // Calculate max scroll based on number of fish and visible rows
-        const regularFish = tank.fish
-            .filter(fish => fish instanceof EmberTetra && !(fish instanceof UserFish))
-            .sort((a, b) => (a as Fish).id.localeCompare((b as Fish).id)); // Sort by ID
-        const totalHeight = regularFish.length * this.rowHeight;
-        const visibleRows = Math.floor((this.height - this.headerHeight - this.footerHeight) / this.rowHeight);
+        if (this.fishViewMode === 'species') {
+            this.renderSpeciesView(tank);
+        } else {
+            this.renderIndividualsView(tank);
+        }
+    }
+
+    private renderSpeciesView(tank: Tank): void {
+        // Get counts for each species
+        const emberTetraCount = tank.fish.filter(fish => fish instanceof EmberTetra && !(fish instanceof UserFish)).length;
+        const snailCount = tank.fish.filter(fish => fish instanceof Snail).length;
+        
+        const species = [
+            { type: 'embertetra' as const, count: emberTetraCount, label: 'Ember Tetras' },
+            { type: 'snail' as const, count: snailCount, label: 'Snails' }
+        ];
+
+        // Calculate max scroll - no footer in species view
+        const totalHeight = species.length * this.rowHeight;
+        const visibleRows = Math.floor((this.height - this.headerHeight) / this.rowHeight);
         this.maxScroll = Math.max(0, totalHeight - visibleRows * this.rowHeight);
 
         // Calculate which rows to show
         const startRow = Math.floor(this.scrollOffset / this.rowHeight);
-        const endRow = Math.min(regularFish.length, startRow + Math.ceil(this.height / this.rowHeight) + 1);
+        const endRow = Math.min(species.length, startRow + Math.ceil(this.height / this.rowHeight) + 1);
 
-        // Draw all potentially visible fish rows
+        // Draw species rows
         for (let i = startRow; i < endRow; i++) {
-            if (i >= 0 && i < regularFish.length) {
+            if (i >= 0 && i < species.length) {
                 const rowY = this.y + this.headerHeight + (i * this.rowHeight) - this.scrollOffset;
                 
                 // Draw row separator
@@ -237,7 +338,46 @@ export class SidePane {
                 strokeWeight(1);
                 line(this.x, rowY + this.rowHeight, this.x + this.width, rowY + this.rowHeight);
                 
-                this.renderFishInfo(regularFish[i], rowY);
+                this.renderSpeciesInfo(species[i], rowY);
+            }
+        }
+    }
+
+    private renderIndividualsView(tank: Tank): void {
+        if (!this.selectedSpecies) return;
+
+        // Filter inhabitants based on selected species
+        let inhabitants: Inhabitant[] = [];
+        if (this.selectedSpecies === 'embertetra') {
+            inhabitants = tank.fish
+                .filter(fish => fish instanceof EmberTetra && !(fish instanceof UserFish))
+                .sort((a, b) => (a as Fish).id.localeCompare((b as Fish).id));
+        } else if (this.selectedSpecies === 'snail') {
+            inhabitants = tank.fish
+                .filter(fish => fish instanceof Snail)
+                .sort((a, b) => (a as any).id?.localeCompare((b as any).id) || 0);
+        }
+
+        // Calculate max scroll
+        const totalHeight = inhabitants.length * this.rowHeight;
+        const visibleRows = Math.floor((this.height - this.headerHeight - this.footerHeight) / this.rowHeight);
+        this.maxScroll = Math.max(0, totalHeight - visibleRows * this.rowHeight);
+
+        // Calculate which rows to show
+        const startRow = Math.floor(this.scrollOffset / this.rowHeight);
+        const endRow = Math.min(inhabitants.length, startRow + Math.ceil(this.height / this.rowHeight) + 1);
+
+        // Draw individual rows
+        for (let i = startRow; i < endRow; i++) {
+            if (i >= 0 && i < inhabitants.length) {
+                const rowY = this.y + this.headerHeight + (i * this.rowHeight) - this.scrollOffset;
+                
+                // Draw row separator
+                stroke(150, 190, 210);
+                strokeWeight(1);
+                line(this.x, rowY + this.rowHeight, this.x + this.width, rowY + this.rowHeight);
+                
+                this.renderFishInfo(inhabitants[i], rowY);
             }
         }
     }
@@ -302,8 +442,11 @@ export class SidePane {
         
         // Create three rectangles to mask overflow on top, bottom, and right sides
         const headerBottom = this.y + this.headerHeight;
+        const hasFooter = this.selectedView === 'fish' && this.fishViewMode === 'individuals';
+        const footerOffset = hasFooter ? this.footerHeight : 0;
+        
         rect(this.x - 10, this.y - 20, this.width + 20, headerBottom - this.y + 20);
-        rect(this.x - 10, this.y + this.height, this.width + 20, tank.height + 100);
+        rect(this.x - 10, this.y + this.height - footerOffset, this.width + 20, tank.height + 100);
         rect(this.x + this.width, 0, 500, tank.height + 100);
         
         // Redraw the pane border which was covered by our masks
@@ -313,6 +456,76 @@ export class SidePane {
         rect(this.x, this.y, this.width, this.height);
         
         pop();
+    }
+
+    private renderSpeciesInfo(species: { type: 'embertetra' | 'snail', count: number, label: string }, y: number): void {
+        // Draw species sprite
+        if (species.type === 'embertetra' && EmberTetra.spritesheet) {
+            // Use a default sprite for the species view
+            const spriteConfig = EmberTetra.SPRITE_CONFIGS[2]; // Front-facing sprite
+            const scale = 0.5;
+            const spriteWidth = spriteConfig.width * scale;
+            const spriteHeight = spriteConfig.height * scale;
+            
+            const spriteX = this.x + this.padding;
+            const spriteY = y + (this.rowHeight - spriteHeight) / 2;
+            
+            image(
+                EmberTetra.spritesheet,
+                spriteX,
+                spriteY,
+                spriteWidth,
+                spriteHeight,
+                spriteConfig.x,
+                spriteConfig.y,
+                spriteConfig.width,
+                spriteConfig.height
+            );
+        } else if (species.type === 'snail' && Snail.spritesheet) {
+            // Use a default snail sprite
+            const spriteConfig = Snail.SPRITE_CONFIGS[2]; // Front-facing sprite
+            const scale = 0.5;
+            const spriteWidth = spriteConfig.width * scale;
+            const spriteHeight = spriteConfig.height * scale;
+            
+            const spriteX = this.x + this.padding;
+            const spriteY = y + (this.rowHeight - spriteHeight) / 2;
+            
+            image(
+                Snail.spritesheet,
+                spriteX,
+                spriteY,
+                spriteWidth,
+                spriteHeight,
+                spriteConfig.x,
+                spriteConfig.y,
+                spriteConfig.width,
+                spriteConfig.height
+            );
+        }
+
+        // Draw species information
+        push();
+        textSize(12);
+        fill(0, 0, 0);
+        noStroke();
+        textAlign(LEFT, CENTER);
+        
+        const infoX = this.x + this.padding + 50;
+        const infoY = y + this.rowHeight / 2;
+        
+        text(`${species.label}: ${species.count}`, infoX, infoY);
+        pop();
+
+        // Handle click to drill down
+        if (this.mouseWasPressed && !mouseIsPressed) {
+            if (mouseX >= this.x && mouseX <= this.x + this.width &&
+                mouseY >= y && mouseY <= y + this.rowHeight) {
+                this.selectedSpecies = species.type;
+                this.fishViewMode = 'individuals';
+                this.scrollOffset = 0; // Reset scroll when switching views
+            }
+        }
     }
 
     private renderFishInfo(fish: Inhabitant, y: number): void {
@@ -345,6 +558,27 @@ export class SidePane {
                     spriteConfig.height
                 );
             }
+        } else if (fish instanceof Snail && Snail.spritesheet) {
+            // Draw snail sprite - use a simple front-facing sprite
+            const spriteConfig = Snail.SPRITE_CONFIGS[2]; // Front-facing sprite
+            const scale = 0.5;
+            const spriteWidth = spriteConfig.width * scale;
+            const spriteHeight = spriteConfig.height * scale;
+            
+            const spriteX = this.x + this.padding;
+            const spriteY = y + (this.rowHeight - spriteHeight) / 2;
+            
+            image(
+                Snail.spritesheet,
+                spriteX,
+                spriteY,
+                spriteWidth,
+                spriteHeight,
+                spriteConfig.x,
+                spriteConfig.y,
+                spriteConfig.width,
+                spriteConfig.height
+            );
         }
 
         // Draw fish information
@@ -357,7 +591,7 @@ export class SidePane {
         const infoX = this.x + this.padding + 50; // Start after the sprite
         const infoY = y + this.rowHeight / 2;
         
-        // Only show fear and hunger for Fish instances
+        // Show different information based on creature type
         if (fish instanceof Fish) {
             // Fear information
             const fearValue = Math.round(fish.getFearValue() * 100);
@@ -368,6 +602,15 @@ export class SidePane {
             const hungerValue = Math.round(fish.getHungerValue() * 100);
             const feedingStatus = fish.isInFeedingMode() ? ' - feeding' : '';
             text(`Hunger: ${hungerValue}%${feedingStatus}`, infoX, infoY + 9);
+        } else if (fish instanceof Snail) {
+            // Size information
+            text(`Size: ${fish.size}`, infoX, infoY - 9);
+            
+            // Fullness information (eating counter)
+            const fullnessValue = Math.round(fish.getEatingCounter());
+            const fullnessPercent = Math.round((fullnessValue / 200) * 100); // Max eating counter is 200
+            const fullnessStatus = fullnessValue > 100 ? ' - full' : fullnessValue > 50 ? ' - satisfied' : ' - hungry';
+            text(`Fullness: ${fullnessPercent}%${fullnessStatus}`, infoX, infoY + 9);
         }
         pop();
 

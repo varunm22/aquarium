@@ -58,11 +58,14 @@ export class Snail extends Inhabitant {
     private goal: Vector | null = null;
     private baseSpeed: number = 0.03 * this.size;
     private wallOffset: number = this.size / 2;
-    private moveVector: Vector = Vector.zero();
+    private velocity: Vector = Vector.zero(); // Current velocity vector
+    private acceleration: Vector = Vector.zero(); // Current acceleration vector
     private coveredAlgaePositions: Set<string> = new Set(); // Track algae positions we've covered
     private tank: Tank | null = null;
     private eatingCounter: number = 0; // Counter for eating algae, affects speed
-    private goalReEvaluationChance: number = 0.002; // Very small chance to re-evaluate goal each frame
+    private goalReEvaluationChance: number = 0.001; // Very small chance to re-evaluate goal each frame
+    private frameCounter: number = 0; // Frame counter for performance optimizations
+    private readonly ALGAE_INTERACTION_INTERVAL: number = 5; // Only check algae every 5 frames
 
     constructor(size: number = 20) {
         const startWall = Snail.getRandomWall();
@@ -145,7 +148,7 @@ export class Snail extends Inhabitant {
             } else {
                 // Try to find algae target if no settled food
                 const pos = this.position.value;
-                const algaeTarget = this.tank.algae.findBestAlgaeTarget(pos.x, pos.y, pos.z, 300);
+                const algaeTarget = this.tank.algae.findBestAlgaeTarget(pos.x, pos.y, pos.z, 600);
                 
                 if (algaeTarget) {
                     // Found algae target, set goal to algae position
@@ -235,7 +238,7 @@ export class Snail extends Inhabitant {
     private findDistantGoal(): Vector {
         const pos = this.position.value;
         const bounds = Snail.getTankBounds();
-        const minDistance = 40;
+        const minDistance = 20;
         let bestGoal: Vector | null = null;
         let bestScore = -Infinity;
 
@@ -378,16 +381,39 @@ export class Snail extends Inhabitant {
         const gridSize = 4; // Algae square size
         const clusterMap = new Map<string, { x: number, y: number, z: number, strength: number, count: number }>();
         
-        // Scan 30x30 area around snail
-        for (let dx = -searchRadius; dx <= searchRadius; dx += gridSize) {
-            for (let dy = -searchRadius; dy <= searchRadius; dy += gridSize) {
-                for (let dz = -searchRadius; dz <= searchRadius; dz += gridSize) {
-                    const checkPos = new Vector(
-                        center.x + dx,
-                        center.y + dy,
-                        center.z + dz
-                    );
-                    
+        // Optimized: Only check 2D grid positions on the current wall
+        // This reduces complexity from O(n³) to O(n²)
+        const wallBounds = this.getWallBounds();
+        const minX = Math.max(wallBounds.minX, center.x - searchRadius);
+        const maxX = Math.min(wallBounds.maxX, center.x + searchRadius);
+        const minY = Math.max(wallBounds.minY, center.y - searchRadius);
+        const maxY = Math.min(wallBounds.maxY, center.y + searchRadius);
+        
+        // Step by grid size to avoid checking every pixel
+        for (let x = Math.floor(minX / gridSize) * gridSize; x <= maxX; x += gridSize) {
+            for (let y = Math.floor(minY / gridSize) * gridSize; y <= maxY; y += gridSize) {
+                // Calculate z based on current wall
+                let z = center.z; // Default to current z
+                switch (this.wall) {
+                    case 'front':
+                        z = wallBounds.minZ + this.wallOffset;
+                        break;
+                    case 'back':
+                        z = wallBounds.maxZ - this.wallOffset;
+                        break;
+                    case 'left':
+                        z = center.z; // Keep current z for side walls
+                        break;
+                    case 'right':
+                        z = center.z; // Keep current z for side walls
+                        break;
+                }
+                
+                const checkPos = new Vector(x, y, z);
+                const distance = center.distanceTo(checkPos);
+                
+                // Only check if within search radius
+                if (distance <= searchRadius) {
                     const algaeLevel = this.tank.algae.getAlgaeLevel(this.wall, checkPos.x, checkPos.y, checkPos.z);
                     if (algaeLevel > 0) {
                         // Group into 8x8 pixel clusters for performance
@@ -437,6 +463,11 @@ export class Snail extends Inhabitant {
         }
         
         return null;
+    }
+
+    private getWallBounds(): { minX: number, maxX: number, minY: number, maxY: number, minZ: number, maxZ: number } {
+        const bounds = Snail.getTankBounds();
+        return bounds;
     }
 
     private generatePath(startPos: Vector, endPos: Vector): PathPoint[] {
@@ -571,12 +602,13 @@ export class Snail extends Inhabitant {
     }
 
     update(inhabitants: Inhabitant[]): void {
+        this.frameCounter++;
         if (this.path.length === 0) {
             this.setNewGoal();
             return;
         }
 
-        // Get tank reference to access algae and food
+        // Get tank reference to access algae and food (cache it)
         if (!this.tank) {
             this.tank = this.getTank(inhabitants);
         }
@@ -600,7 +632,7 @@ export class Snail extends Inhabitant {
         this.moveTowardsCurrentTarget();
 
         // Check if we've reached the current target
-        if (distanceToTarget < 10) {
+        if (distanceToTarget < 8) {
             // Remove the reached point from the path
             this.path.shift();
             
@@ -610,7 +642,7 @@ export class Snail extends Inhabitant {
                 if (currentTarget.wall !== this.wall) {
                     this.transitionToWall(currentTarget.wall);
                 }
-                this.setMovementVectorToTarget(nextTarget.position);
+                this.updateAccelerationTowardsTarget(nextTarget.position);
             } else {
                 // Path completed, set new goal
                 this.setNewGoal();
@@ -622,17 +654,29 @@ export class Snail extends Inhabitant {
 
     private moveTowardsCurrentTarget(): void {
         if (this.path.length === 0) {
-            this.moveVector = Vector.zero();
+            this.velocity = Vector.zero();
+            this.acceleration = Vector.zero();
             return;
         }
 
         const currentTarget = this.path[0];
-        this.setMovementVectorToTarget(currentTarget.position);
+        this.updateAccelerationTowardsTarget(currentTarget.position);
         
-        this.position.value.addInPlace(this.moveVector);
+        // Apply acceleration to velocity
+        this.velocity.addInPlace(this.acceleration);
+        
+        // Clamp velocity to maximum speed
+        const maxSpeed = this.getCurrentSpeed();
+        const currentSpeed = this.velocity.magnitude();
+        if (currentSpeed > maxSpeed) {
+            this.velocity.normalize().multiplyInPlace(maxSpeed);
+        }
+        
+        // Apply velocity to position
+        this.position.value.addInPlace(this.velocity);
     }
 
-    private setMovementVectorToTarget(target: Vector): void {
+    private updateAccelerationTowardsTarget(target: Vector): void {
         const toTarget = target.copy().subtractInPlace(this.position.value);
 
         let projectedToTarget: Vector;
@@ -652,11 +696,12 @@ export class Snail extends Inhabitant {
 
         const projectedDistance = projectedToTarget.magnitude();
         if (projectedDistance > 0) {
-            const currentSpeed = this.getCurrentSpeed();
-            const moveDistance = Math.min(currentSpeed, projectedDistance);
-            this.moveVector = projectedToTarget.normalize().multiplyInPlace(moveDistance);
+            // Set acceleration to 20% of max speed in the direction of the target
+            const maxSpeed = this.getCurrentSpeed();
+            const accelerationMagnitude = maxSpeed * 0.2;
+            this.acceleration = projectedToTarget.normalize().multiplyInPlace(accelerationMagnitude);
         } else {
-            this.moveVector = Vector.zero();
+            this.acceleration = Vector.zero();
         }
     }
 
@@ -665,37 +710,37 @@ export class Snail extends Inhabitant {
         this.wall = newWall;
         
         // Transform the current velocity vector for the new wall orientation
-        const v = this.moveVector.copy();
+        const v = this.velocity.copy();
         switch (`${oldWall}-${newWall}`) {
             // Front to sides
-            case 'front-left': this.moveVector = new Vector(0, v.y, -v.x); break;
-            case 'front-right': this.moveVector = new Vector(0, v.y, v.x); break;
-            case 'front-bottom': this.moveVector = new Vector(v.x, 0, -v.y); break;
+            case 'front-left': this.velocity = new Vector(0, v.y, -v.x); break;
+            case 'front-right': this.velocity = new Vector(0, v.y, v.x); break;
+            case 'front-bottom': this.velocity = new Vector(v.x, 0, -v.y); break;
             
             // Back to sides
-            case 'back-left': this.moveVector = new Vector(0, v.y, v.x); break;
-            case 'back-right': this.moveVector = new Vector(0, v.y, -v.x); break;
-            case 'back-bottom': this.moveVector = new Vector(v.x, 0, v.y); break;
+            case 'back-left': this.velocity = new Vector(0, v.y, v.x); break;
+            case 'back-right': this.velocity = new Vector(0, v.y, -v.x); break;
+            case 'back-bottom': this.velocity = new Vector(v.x, 0, v.y); break;
 
             // Left to sides
-            case 'left-front': this.moveVector = new Vector(-v.z, v.y, 0); break;
-            case 'left-back': this.moveVector = new Vector(v.z, v.y, 0); break;
-            case 'left-bottom': this.moveVector = new Vector(v.z, 0, -v.y); break;
+            case 'left-front': this.velocity = new Vector(-v.z, v.y, 0); break;
+            case 'left-back': this.velocity = new Vector(v.z, v.y, 0); break;
+            case 'left-bottom': this.velocity = new Vector(v.z, 0, -v.y); break;
 
             // Right to sides
-            case 'right-front': this.moveVector = new Vector(v.z, v.y, 0); break;
-            case 'right-back': this.moveVector = new Vector(-v.z, v.y, 0); break;
-            case 'right-bottom': this.moveVector = new Vector(-v.z, 0, -v.y); break;
+            case 'right-front': this.velocity = new Vector(v.z, v.y, 0); break;
+            case 'right-back': this.velocity = new Vector(-v.z, v.y, 0); break;
+            case 'right-bottom': this.velocity = new Vector(-v.z, 0, -v.y); break;
 
             // Bottom to sides
-            case 'bottom-front': this.moveVector = new Vector(v.x, -v.z, 0); break;
-            case 'bottom-back': this.moveVector = new Vector(v.x, v.z, 0); break;
-            case 'bottom-left': this.moveVector = new Vector(0, v.z, v.x); break;
-            case 'bottom-right': this.moveVector = new Vector(0, v.z, -v.x); break;
+            case 'bottom-front': this.velocity = new Vector(v.x, -v.z, 0); break;
+            case 'bottom-back': this.velocity = new Vector(v.x, v.z, 0); break;
+            case 'bottom-left': this.velocity = new Vector(0, v.z, v.x); break;
+            case 'bottom-right': this.velocity = new Vector(0, v.z, -v.x); break;
             
             default:
-                // If no specific transformation, reset movement vector
-                this.moveVector = Vector.zero();
+                // If no specific transformation, reset velocity vector
+                this.velocity = Vector.zero();
                 break;
         }
         
@@ -773,7 +818,21 @@ export class Snail extends Inhabitant {
         return null;
     }
 
+    // Public method to set tank reference directly (more efficient)
+    public setTank(tank: Tank): void {
+        this.tank = tank;
+    }
+
+    // Public getter for eating counter (fullness)
+    public getEatingCounter(): number {
+        return this.eatingCounter;
+    }
+
     private handleAlgaeInteraction(tank: Tank): void {
+        if (this.frameCounter % this.ALGAE_INTERACTION_INTERVAL !== 0) {
+            return;
+        }
+
         // Only interact with algae on walls that support it (not bottom)
         if (this.wall === 'bottom') return;
 
@@ -831,24 +890,42 @@ export class Snail extends Inhabitant {
         const positions: Vector[] = [];
         const gridSize = 4; // Algae square size
         
-        // Calculate grid bounds to check
-        const minX = center.x - radius;
-        const maxX = center.x + radius;
-        const minY = center.y - radius;
-        const maxY = center.y + radius;
-        const minZ = center.z - radius;
-        const maxZ = center.z + radius;
+        // Optimized: Only check 2D positions on the current wall
+        // This reduces complexity from O(n³) to O(n²)
+        const wallBounds = this.getWallBounds();
+        const minX = Math.max(wallBounds.minX, center.x - radius);
+        const maxX = Math.min(wallBounds.maxX, center.x + radius);
+        const minY = Math.max(wallBounds.minY, center.y - radius);
+        const maxY = Math.min(wallBounds.maxY, center.y + radius);
         
-        // Generate grid positions within the radius
+        // Calculate z based on current wall
+        let z = center.z; // Default to current z
+        switch (this.wall) {
+            case 'front':
+                z = wallBounds.minZ + this.wallOffset;
+                break;
+            case 'back':
+                z = wallBounds.maxZ - this.wallOffset;
+                break;
+            case 'left':
+                z = center.z; // Keep current z for side walls
+                break;
+            case 'right':
+                z = center.z; // Keep current z for side walls
+                break;
+        }
+        
+        // Generate grid positions within the radius (2D only)
         for (let x = Math.floor(minX / gridSize) * gridSize; x <= maxX; x += gridSize) {
             for (let y = Math.floor(minY / gridSize) * gridSize; y <= maxY; y += gridSize) {
-                for (let z = Math.floor(minZ / gridSize) * gridSize; z <= maxZ; z += gridSize) {
-                    const gridPos = new Vector(x, y, z);
-                    
-                    // Check if this grid position is within radius
-                    if (center.distanceTo(gridPos) <= radius) {
-                        positions.push(gridPos);
-                    }
+                // Use squared distance to avoid square root calculation
+                const dx = x - center.x;
+                const dy = y - center.y;
+                const distanceSquared = dx * dx + dy * dy;
+                
+                // Check if this grid position is within radius (squared)
+                if (distanceSquared <= radius * radius) {
+                    positions.push(new Vector(x, y, z));
                 }
             }
         }
@@ -863,7 +940,7 @@ export class Snail extends Inhabitant {
     }
 
     private getSpriteIndexAndRotation(): { index: number; rotation: number; mirrored: boolean } {
-        const delta = this.moveVector;
+        const delta = this.velocity;
         
         // Handle front and back walls specially - use top/bottom sprites with rotation
         if (this.wall === 'front') {

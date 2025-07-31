@@ -58,7 +58,7 @@ export class Algae {
 
     // Algae hotspot tracking for snail navigation
     private algaeHotspots: AlgaeHotspot[] = [];
-    private hotspotUpdateChance: number = 0.01; // 1% chance per frame to update hotspots
+    private frameCounter: number = 0; // Add frame counter for more controlled updates
 
     // Removed chunked rendering variables to eliminate flickering
 
@@ -187,6 +187,8 @@ export class Algae {
     }
 
     public update(): void {
+        this.frameCounter++;
+        
         // 1% chance to create new algae each frame
         if (random() < this.newGrowthChance) {
             this.growAlgae();
@@ -200,8 +202,8 @@ export class Algae {
             this.cleanupActiveCells();
         }
 
-        // Update algae hotspots periodically (1% chance per frame)
-        if (this.fastRandom() < this.hotspotUpdateChance) {
+        // Update algae hotspots less frequently (every ~1000 frames instead of 1% chance)
+        if (this.frameCounter % 1000 === 0) {
             this.updateAlgaeHotspots();
         }
     }
@@ -634,7 +636,7 @@ export class Algae {
         }
     }
 
-    public findBestAlgaeTarget(snailX: number, snailY: number, snailZ: number, maxDistance: number = 300): { x: number, y: number, z: number, wall: 'front' | 'back' | 'left' | 'right' } | null {
+    public findBestAlgaeTarget(snailX: number, snailY: number, snailZ: number, maxDistance: number = 600): { x: number, y: number, z: number, wall: 'front' | 'back' | 'left' | 'right' } | null {
         let bestTarget: { x: number, y: number, z: number, wall: 'front' | 'back' | 'left' | 'right' } | null = null;
         let bestScore = -1;
 
@@ -647,8 +649,13 @@ export class Algae {
 
             if (distance > maxDistance) continue;
 
-            // Score = strength / (distance + 1) - higher is better
-            const score = hotspot.strength / Math.max(distance + 1, 100);
+            // Improved scoring: balance between algae amount and distance
+            // Formula: (algae_strength * algae_count) / (distance^1.5 + 50)
+            // This gives more weight to algae amount while still considering distance
+            // The ^1.5 makes distance less punishing than linear, and +50 prevents division by very small numbers
+            const algaeValue = hotspot.strength * hotspot.count;
+            const distancePenalty = Math.pow(distance + 50, 1.5);
+            const score = algaeValue / distancePenalty;
 
             if (score > bestScore) {
                 bestScore = score;
