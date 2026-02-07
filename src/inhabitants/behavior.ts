@@ -5,77 +5,55 @@ import { Food } from './food.js';
 import { Vector } from '../vector.js';
 import { getTankBounds } from '../constants.js';
 
-/**
- * Handles the behavior of a fish that is not in water
- * Returns true if the fish should continue with normal behavior, false if it should skip normal behavior
- */
 export function handleNotInWater(fish: Fish): boolean {
-    // Apply constant downward acceleration
-    fish.position.delta.y += 0.4; // Add to velocity directly
+    fish.position.delta.y += 0.4;
     
-    // Check if fish has reached the water surface using tank bounds
     const bounds = getTankBounds();
     if (fish.position.y >= bounds.min.y) {
         fish.in_water = true;
-        fish.position.setShouldConstrain(true); // Enable constraints when entering water
-        fish.position.delta.y *= 0.5 // slow down when entering water
-        fish.splash = 10; // Set splash counter to 10 frames
+        fish.position.setShouldConstrain(true);
+        fish.position.delta.y *= 0.5;
+        fish.splash = 10;
     }
-    return false; // Skip normal behavior
+    return false;
 }
 
-/**
- * Updates all the fish's internal factors (fear, hunger, etc)
- */
 export function updateFactors(fish: Fish, fish_by_lateral_line: Inhabitant[]): void {
     fish.updateFear();
     fish.updateHunger();
 
-    // Check for splashes from nearby fish
     for (let other of fish_by_lateral_line) {
         if (other instanceof Fish && other.splash > 0) {
             const direction = other.position.value.subtract(fish.position.value);
             const distance = direction.magnitude();
-            const baseDistance = 35;
-            const splashIntensity = Math.min(0.3, baseDistance / distance);
+            const splashIntensity = Math.min(0.3, 35 / distance);
             fish.increaseFear(splashIntensity, direction);
         }
     }
 }
 
-// Helper function to calculate distance between fish and food/inhabitant
 function distanceToTarget(fish: Fish, target: Inhabitant | Food): number {
     if (target instanceof Food) {
         return fish.position.value.distanceTo(target.position.value);
-    } else {
-        return fish.distanceTo(target);
     }
+    return fish.distanceTo(target);
 }
 
-// Helper function to check if target is in field of view
 function isTargetInFieldOfView(fish: Fish, target: Inhabitant | Food, maxAngle: number = 45, maxDistance: number = 300): boolean {
     if (target instanceof Food) {
-        // Replicate the field of view logic for Food
         const disp = target.position.value.subtract(fish.position.value);
         const distance = fish.position.value.distanceTo(target.position.value);
-        
         if (distance > maxDistance) return false;
         
         const disp_norm = disp.divide(disp.magnitude());
         const fish_dir = fish.position.delta.divide(fish.position.delta.magnitude());
         const dotProduct = disp_norm.dotProduct(fish_dir);
-        const angle = Math.acos(Math.max(-1, Math.min(1, dotProduct))); // Clamp to prevent NaN
-        const angleDegrees = (angle * 180) / Math.PI;
-        
-        return angleDegrees <= maxAngle;
-    } else {
-        return fish.isInFieldOfView(target, maxAngle, maxDistance);
+        const angle = Math.acos(Math.max(-1, Math.min(1, dotProduct)));
+        return (angle * 180 / Math.PI) <= maxAngle;
     }
+    return fish.isInFieldOfView(target, maxAngle, maxDistance);
 }
 
-/**
- * Scans the environment for other inhabitants and categorizes them
- */
 export function scanEnvironment(fish: Fish, inhabitants: Inhabitant[], food: Food[]): {
     fish_in_view: Inhabitant[],
     fish_by_lateral_line: Inhabitant[],
@@ -90,24 +68,20 @@ export function scanEnvironment(fish: Fish, inhabitants: Inhabitant[], food: Foo
     
     for (let other of inhabitants) {
         if (other !== fish) {
-            if (other instanceof Fish) {  // Handle fish
+            if (other instanceof Fish) {
                 if (fish.isInFieldOfView(other, 45, 300)) {
                     fish_in_view.push(other);
-                } else if (fish.distanceTo(other) <= 50 || other.splash > 0) { // Check lateral line or splash
+                } else if (fish.distanceTo(other) <= 50 || other.splash > 0) {
                     fish_by_lateral_line.push(other);
                 }
-            } else if (other instanceof Microfauna) {  // Handle microfauna
+            } else if (other instanceof Microfauna) {
                 if (fish.isInFieldOfView(other, 45, 300)) {
-                    // Apply size-based detection probability
-                    // No detection from size 1.0 to 1.5, then scale from 0% at size 1.5 to 100% at size 3.5
+                    // Detection scales from 0% at size 1.5 to 100% at size 3.5
                     const size = other.getSize();
                     let detectionProbability = 0;
-                    
                     if (size >= 1.5) {
-                        // Scale from 0% at size 1.5 to 100% at size 3.5
-                        detectionProbability = Math.min(1, (size - 1.5) / (3.5 - 1.5));
+                        detectionProbability = Math.min(1, (size - 1.5) / 2.0);
                     }
-                    
                     if (Math.random() < detectionProbability) {
                         microfauna_in_view.push(other);
                     }
@@ -116,26 +90,23 @@ export function scanEnvironment(fish: Fish, inhabitants: Inhabitant[], food: Foo
         }
     }
 
-    // Check food particles for visual detection
     for (let foodParticle of food) {
         if (isTargetInFieldOfView(fish, foodParticle, 45, 300)) {
             let detectionProbability: number;
-            
             if (foodParticle.settled) {
-                detectionProbability = 0.001; // 0.1% chance for settled food
+                detectionProbability = 0.001;
             } else if (foodParticle.floating) {
-                detectionProbability = 0.001; // 0.1% chance for floating food
+                detectionProbability = 0.001;
             } else {
-                detectionProbability = 0.1; // 10% chance for sinking food
+                detectionProbability = 0.1;
             }
-            
             if (Math.random() < detectionProbability) {
                 food_in_view.push(foodParticle);
             }
         }
     }
 
-    // Calculate smelled food direction (separate from visual detection)
+    // Smell detection: inverse-square falloff, weighted direction averaging
     let smelled_food_direction: Vector | null = null;
     let totalFoodDirection = Vector.zero();
     let foodCount = 0;
@@ -143,34 +114,26 @@ export function scanEnvironment(fish: Fish, inhabitants: Inhabitant[], food: Foo
     for (let foodParticle of food) {
         const distance = fish.position.value.distanceTo(foodParticle.position.value);
         
-        // Base smell strength based on food state
         let baseSmellStrength = 0;
-        
         if (foodParticle.settled) {
-            baseSmellStrength = 0.0001; // Very weak smell from settled food
+            baseSmellStrength = 0.0001;
         } else if (foodParticle.floating) {
-            baseSmellStrength = 0.0001; // Moderate smell from floating food
+            baseSmellStrength = 0.0001;
         } else {
-            baseSmellStrength = 0.10; // Strong smell from sinking food (fresh)
+            baseSmellStrength = 0.10;
         }
         
-        // Distance-based probability: smell detection decreases with distance
-        // Using inverse square law-like falloff but capped to prevent extremely low probabilities
         const distanceBasedProbability = Math.max(baseSmellStrength / (1 + distance * distance / 10000), baseSmellStrength * 0.01);
         
-        // Random chance to detect the smell based on distance
         if (Math.random() < distanceBasedProbability) {
             const direction = foodParticle.position.value.subtract(fish.position.value);
-            // Weight the direction by the detection strength
             totalFoodDirection.addInPlace(direction.multiply(distanceBasedProbability));
             foodCount++;
         }
     }
 
-    // Average the direction if multiple food sources detected
     if (foodCount > 0) {
         smelled_food_direction = totalFoodDirection.divide(foodCount);
-        // Normalize to a very gentle magnitude for subtle movement
         const magnitude = smelled_food_direction.magnitude();
         if (magnitude > 0) {
             smelled_food_direction = smelled_food_direction.divide(magnitude).multiply(0.02);
@@ -180,9 +143,6 @@ export function scanEnvironment(fish: Fish, inhabitants: Inhabitant[], food: Foo
     return { fish_in_view, fish_by_lateral_line, microfauna_in_view, food_in_view, smelled_food_direction };
 }
 
-/**
- * Applies movement based on the calculated net force and initiative
- */
 function applyMovement(
     fish: Fish, 
     netForce: Vector, 
@@ -194,41 +154,26 @@ function applyMovement(
         forceMultiplier?: number
     } = {}
 ): void {
-    // Default parameters
-    const defaultParams = {
-        movementChance: 0.2,         // Base chance of movement
-        initiativeMultiplier: 2,     // How much force magnitude affects initiative
-        initiativeDecay: 0.1,        // How much initiative decreases after movement
-        variance: 0.2,                // Variance in movement magnitude
-        forceMultiplier: 10          // How much we multiply initiative to get force magnitude
+    const p = {
+        movementChance: 0.2,
+        initiativeMultiplier: 2,
+        initiativeDecay: 0.1,
+        variance: 0.2,
+        forceMultiplier: 10,
+        ...params
     };
 
-    // Merge default parameters with provided parameters
-    const finalParams = { ...defaultParams, ...params };
-
-    // Update initiative based on force magnitude
     const forceMagnitude = netForce.magnitude();
-    fish.updateInitiative(forceMagnitude * finalParams.initiativeMultiplier);
+    fish.updateInitiative(forceMagnitude * p.initiativeMultiplier);
 
-    // Calculate movement probability and magnitude based on initiative
-    if (Math.random() < Math.min(finalParams.movementChance, fish.getInitiativeValue())) {
-        // Normalize the force vector for direction
+    if (Math.random() < Math.min(p.movementChance, fish.getInitiativeValue())) {
         const direction = netForce.divide(forceMagnitude || 1);
-        
-        // Calculate movement magnitude with some variance
-        const baseMagnitude = fish.getInitiativeValue() * finalParams.forceMultiplier;
-        const magnitude = baseMagnitude * (1 + (Math.random() - 0.5) * finalParams.variance);
-        
-        // Apply the movement
+        const magnitude = fish.getInitiativeValue() * p.forceMultiplier * (1 + (Math.random() - 0.5) * p.variance);
         fish.position.applyAcceleration(direction.multiply(magnitude), 1);
-        
-        fish.setInitiativeValue(fish.getInitiativeValue() * finalParams.initiativeDecay);
+        fish.setInitiativeValue(fish.getInitiativeValue() * p.initiativeDecay);
     }
 }
 
-/**
- * Base function for calculating net force based on environment and behavior parameters
- */
 function calculateNetForce(
     fish: Fish,
     fish_in_view: Inhabitant[],
@@ -242,99 +187,62 @@ function calculateNetForce(
         randomRange?: number
     } = {}
 ): Vector {
-    // Default parameters for normal behavior
-    const defaultParams = {
-        attractionMultiplier: 0.005,  // Normal attraction
-        attractionCap: 0.001,          // Standard cap on attraction force
-        repulsionMultiplier: 0.2,      // Standard repulsion
-        repulsionCap: 0.1,            // Standard repulsion cap
-        randomThreshold: 0.25,        // Normal chance of random movement
-        randomRange: 0.01             // Normal random vectors
+    const p = {
+        attractionMultiplier: 0.005,
+        attractionCap: 0.001,
+        repulsionMultiplier: 0.2,
+        repulsionCap: 0.1,
+        randomThreshold: 0.25,
+        randomRange: 0.01,
+        ...params
     };
-
-    // Merge default parameters with provided parameters
-    const finalParams = { ...defaultParams, ...params };
 
     let totalForce = Vector.zero();
 
-    // Handle fish in visual range
     for (let other of fish_in_view) {
         if (other.constructor.name === 'UserFish') {
-            // weak attraction to user fish
             totalForce.addInPlace(fish.calculateAttractionForce(other, 0.02, 0.0005));
         } else {
             const distance = fish.distanceTo(other);
             if (distance > 150) {
-                totalForce.addInPlace(fish.calculateAttractionForce(other, finalParams.attractionCap, finalParams.attractionMultiplier));
+                totalForce.addInPlace(fish.calculateAttractionForce(other, p.attractionCap, p.attractionMultiplier));
             } else if (distance < 150) {
-                totalForce.addInPlace(fish.calculateRepulsionForce(other, finalParams.repulsionCap, finalParams.repulsionMultiplier));
+                totalForce.addInPlace(fish.calculateRepulsionForce(other, p.repulsionCap, p.repulsionMultiplier));
             }
         }
     }
 
-    // Handle fish detected by lateral line
     for (let other of fish_by_lateral_line) {
         if (other instanceof Fish) {
-            totalForce.addInPlace(fish.calculateRepulsionForce(other, finalParams.repulsionCap, finalParams.repulsionMultiplier));
+            totalForce.addInPlace(fish.calculateRepulsionForce(other, p.repulsionCap, p.repulsionMultiplier));
         }
     }
 
-    if (fish_in_view.length === 0) {
-        if (Math.random() < finalParams.randomThreshold) {
-            totalForce.addInPlace(generateConstrainedRandomVector(finalParams.randomRange));
-        }
+    if (fish_in_view.length === 0 && Math.random() < p.randomThreshold) {
+        totalForce.addInPlace(generateConstrainedRandomVector(p.randomRange));
     }
 
     return totalForce;
 }
 
-/**
- * Calculates net force for a fish in fear mode
- */
 function calculateFearNetForce(fish: Fish, fish_in_view: Inhabitant[], fish_by_lateral_line: Inhabitant[]): Vector {
-    // Only specify parameters that differ from normal behavior
     const fearValue = fish.getFearValue();
-    const attractionMultiplier = 0.005 + (fearValue - 0.5) * 0.05
-    const fearParams = {
-        attractionMultiplier: attractionMultiplier,  // Stronger attraction to other fish for safety
-        randomRange: 0.5                             // Larger random vectors
-    };
+    const totalForce = calculateNetForce(fish, fish_in_view, fish_by_lateral_line, {
+        attractionMultiplier: 0.005 + (fearValue - 0.5) * 0.05,
+        randomRange: 0.5
+    });
 
-    const totalForce = calculateNetForce(fish, fish_in_view, fish_by_lateral_line, fearParams);
-
-    // Add strong force away from fear direction, scaled by fear magnitude
     const fearDirection = fish.getFearDirection();
-    // Scale the escape force by fear value (0.5 to 1.0 maps to 0.1 to 0.2)
-    const fearMagnitude = Math.max(fearValue - 0.7, 0) * 0.05
-    // const fearMagnitude = (fish.getFearValue() - 0.5) * 2; // Normalize 0.5-1.0 to 0-1
-    const escapeForce = fearDirection.multiply(-1 * fearMagnitude);
-    totalForce.addInPlace(escapeForce);
+    const fearMagnitude = Math.max(fearValue - 0.7, 0) * 0.05;
+    totalForce.addInPlace(fearDirection.multiply(-1 * fearMagnitude));
     return totalForce;
 }
 
-/**
- * Calculates net force for a fish in normal mode
- */
-function calculateNormalNetForce(fish: Fish, fish_in_view: Inhabitant[], fish_by_lateral_line: Inhabitant[]): Vector {
-    // Use default parameters
-    return calculateNetForce(fish, fish_in_view, fish_by_lateral_line);
-}
-
-/**
- * Handles movement for a fish in fear mode
- */
 export function handleFearMovement(fish: Fish, fish_in_view: Inhabitant[], fish_by_lateral_line: Inhabitant[]): void {
     const netForce = calculateFearNetForce(fish, fish_in_view, fish_by_lateral_line);
-    const params = {
-        forceMultiplier: 3,
-    }
-    applyMovement(fish, netForce, params);
+    applyMovement(fish, netForce, { forceMultiplier: 3 });
 }
 
-/**
- * Generates a random vector with constrained vertical movement
- * The vertical (y) component will be at most half the magnitude of the horizontal (x,z) components
- */
 function generateConstrainedRandomVector(range: number): Vector {
     const x = (Math.random() - 0.5) * range;
     const z = (Math.random() - 0.5) * range;
@@ -344,75 +252,44 @@ function generateConstrainedRandomVector(range: number): Vector {
     return new Vector(x, y, z);
 }
 
-/**
- * Handles movement for a fish in hunger mode
- */
 export function handleHungerMovement(fish: Fish, microfauna_in_view: Inhabitant[], food_in_view: Food[]): void {
-    // If fish is currently eating, just drift
-    if (fish.isEating()) {
-        return;
-    }
+    if (fish.isEating()) return;
 
-    // If no target, look for nearest food
     if (!fish.getStrikeTarget()) {
         const nearestFood = findNearestFood(fish, microfauna_in_view, food_in_view);
         if (nearestFood) {
             fish.setHungerTarget(nearestFood);
         } else {
-            // No specific food target, but check if we have a general smell direction
             const smelledDirection = fish.getSmelledFoodDirection();
             if (smelledDirection) {
-                // Move gently towards the smelled food direction (very subtle influence)
-                applyMovement(fish, smelledDirection, {
-                    forceMultiplier: 2,
-                    movementChance: 0.15,
-                    variance: 0.4  // Add more randomness to make it feel natural
-                });
-            } else {
-                // Add random movement while searching for food
-                if (Math.random() < 0.1) {
-                    const randomForce = generateConstrainedRandomVector(0.1);
-                    applyMovement(fish, randomForce);
-                }
+                applyMovement(fish, smelledDirection, { forceMultiplier: 2, movementChance: 0.15, variance: 0.4 });
+            } else if (Math.random() < 0.1) {
+                applyMovement(fish, generateConstrainedRandomVector(0.1));
             }
             return;
         }
     }
 
-    // If we have a target, verify it still exists in the tank and is in sight
     let target = fish.getStrikeTarget();
     let shouldEndStrike = false;
 
-    // Check if target is valid and in tank
     if (!target) {
         shouldEndStrike = true;
     } else if (target instanceof Microfauna) {
         if (!target.tank) {
             shouldEndStrike = true;
-        } else {
-            const index = target.tank.microfauna.indexOf(target);
-            if (index === -1) {
-                shouldEndStrike = true;
-            } else {
-                // Check if target is out of sight with 0.1 chance to end strike
-                if (!isTargetInFieldOfView(fish, target, 45, 300) && Math.random() < 0.1) {
-                    shouldEndStrike = true;
-                }
-            }
+        } else if (target.tank.microfauna.indexOf(target) === -1) {
+            shouldEndStrike = true;
+        } else if (!isTargetInFieldOfView(fish, target, 45, 300) && Math.random() < 0.1) {
+            shouldEndStrike = true;
         }
     } else if (target instanceof Food) {
         if (!target.tank) {
             shouldEndStrike = true;
-        } else {
-            const index = target.tank.food.indexOf(target);
-            if (index === -1) {
-                shouldEndStrike = true;
-            } else {
-                // Check if target is out of sight with 0.1 chance to end strike
-                if (!isTargetInFieldOfView(fish, target, 45, 300) && Math.random() < 0.1) {
-                    shouldEndStrike = true;
-                }
-            }
+        } else if (target.tank.food.indexOf(target) === -1) {
+            shouldEndStrike = true;
+        } else if (!isTargetInFieldOfView(fish, target, 45, 300) && Math.random() < 0.1) {
+            shouldEndStrike = true;
         }
     } else {
         shouldEndStrike = true;
@@ -423,7 +300,6 @@ export function handleHungerMovement(fish: Fish, microfauna_in_view: Inhabitant[
         return;
     }
 
-    // At this point, target is guaranteed to be non-null due to the checks above
     if (!target) {
         fish.endStrike();
         return;
@@ -432,54 +308,38 @@ export function handleHungerMovement(fish: Fish, microfauna_in_view: Inhabitant[
     const direction = target.position.value.subtract(fish.position.value);
     const distance = direction.magnitude();
 
-    // If not in strike mode and within striking distance, start strike
     if (!fish.isInStrike() && distance < 100) {
         fish.startStrike(target);
     }
 
-    // Handle movement based on whether we're in strike mode
     if (fish.isInStrike()) {
-        // When striking, use direct acceleration for precise movement
         direction.divideInPlace(distance);
         fish.position.applyAcceleration(direction.multiply(Math.max(distance * 0.002, 0.1)), 1);
     } else {
-        // When not striking, use net force to influence movement
-        // This will work with the initiative system for more natural movement
-        const forceMagnitude = 0.01; // Strong enough to influence movement but not override initiative
-        const netForce = direction.divide(distance).multiply(forceMagnitude);
+        const netForce = direction.divide(distance).multiply(0.01);
         applyMovement(fish, netForce);
     }
 
-    // Check if caught the target
     if (distance < 10) {
         fish.endStrike();
         fish.decreaseHunger(0.1);
         fish.startEating();
         
-        // Remove the target from the tank
         if (target instanceof Microfauna && target.tank) {
             const index = target.tank.microfauna.indexOf(target);
-            if (index > -1) {
-                target.tank.microfauna.splice(index, 1);
-            }
+            if (index > -1) target.tank.microfauna.splice(index, 1);
         } else if (target instanceof Food && target.tank) {
             const index = target.tank.food.indexOf(target);
-            if (index > -1) {
-                target.tank.food.splice(index, 1);
-            }
+            if (index > -1) target.tank.food.splice(index, 1);
         }
     }
 }
 
-/**
- * Finds the nearest food source within the fish's field of view
- */
 function findNearestFood(fish: Fish, microfauna_in_view: Inhabitant[], food_in_view: Food[]): Inhabitant | Food | null {
     let nearest: Inhabitant | Food | null = null;
     let minDistance = Infinity;
-    const HUNT_RADIUS = 200; // Maximum distance to detect food
+    const HUNT_RADIUS = 200;
 
-    // Check microfauna
     for (const inhabitant of microfauna_in_view) {
         if (inhabitant.constructor.name === 'Microfauna') {
             const distance = fish.distanceTo(inhabitant);
@@ -490,7 +350,6 @@ function findNearestFood(fish: Fish, microfauna_in_view: Inhabitant[], food_in_v
         }
     }
 
-    // Check food particles
     for (const foodParticle of food_in_view) {
         const distance = distanceToTarget(fish, foodParticle);
         if (distance < HUNT_RADIUS && distance < minDistance) {
@@ -502,10 +361,7 @@ function findNearestFood(fish: Fish, microfauna_in_view: Inhabitant[], food_in_v
     return nearest;
 }
 
-/**
- * Handles movement for a fish in normal mode
- */
 export function handleNormalMovement(fish: Fish, fish_in_view: Inhabitant[], fish_by_lateral_line: Inhabitant[]): void {
-    const netForce = calculateNormalNetForce(fish, fish_in_view, fish_by_lateral_line);
+    const netForce = calculateNetForce(fish, fish_in_view, fish_by_lateral_line);
     applyMovement(fish, netForce);
-} 
+}

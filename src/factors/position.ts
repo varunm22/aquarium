@@ -13,29 +13,12 @@ export class Position extends Factor<Vector> {
         this.decay = decay;
     }
 
-    get x(): number {
-        return this.value.x;
-    }
-
-    set x(newX: number) {
-        this.value.x = newX;
-    }
-
-    get y(): number {
-        return this.value.y;
-    }
-
-    set y(newY: number) {
-        this.value.y = newY;
-    }
-
-    get z(): number {
-        return this.value.z;
-    }
-
-    set z(newZ: number) {
-        this.value.z = newZ;
-    }
+    get x(): number { return this.value.x; }
+    set x(newX: number) { this.value.x = newX; }
+    get y(): number { return this.value.y; }
+    set y(newY: number) { this.value.y = newY; }
+    get z(): number { return this.value.z; }
+    set z(newZ: number) { this.value.z = newZ; }
 
     setShouldConstrain(shouldConstrain: boolean): void {
         this.shouldConstrain = shouldConstrain;
@@ -46,35 +29,27 @@ export class Position extends Factor<Vector> {
         this.accelerationDuration = duration;
     }
 
-    /**
-     * Calculates wall avoidance force when within 50 units of walls or floor
-     * Does not avoid the water surface (top boundary)
-     * Only activates when velocity is heading towards the wall
-     * Force is proportional to velocity/distance (inversely proportional to collision time)
-     */
+    /** Wall avoidance: force proportional to velocity/distance (inversely proportional to collision time).
+     *  Only activates when heading towards a wall within 50 units. Does not avoid the water surface. */
     private calculateWallAvoidanceForce(): Vector {
         const bounds = getTankBounds();
         const avoidanceDistance = 50;
         const forceMultiplier = 100;
         let avoidanceForce = Vector.zero();
 
-        // Define boundaries: [position, boundaryValue, forceDirection, velocityComponent, movingTowardsCondition]
         const boundaries: [number, number, Vector, number, (vel: number) => boolean][] = [
-            [this.value.x, bounds.min.x, new Vector(1, 0, 0), this.delta.x, (vel) => vel < -0.5],   // Left wall
-            [this.value.x, bounds.max.x, new Vector(-1, 0, 0), this.delta.x, (vel) => vel > 0.5],  // Right wall
-            [this.value.y, bounds.max.y, new Vector(0, -1, 0), this.delta.y, (vel) => vel > 0.5],  // Floor only
-            [this.value.z, bounds.min.z, new Vector(0, 0, 1), this.delta.z, (vel) => vel < -0.5],   // Back wall
-            [this.value.z, bounds.max.z, new Vector(0, 0, -1), this.delta.z, (vel) => vel > 0.5]   // Front wall
+            [this.value.x, bounds.min.x, new Vector(1, 0, 0), this.delta.x, (vel) => vel < -0.5],
+            [this.value.x, bounds.max.x, new Vector(-1, 0, 0), this.delta.x, (vel) => vel > 0.5],
+            [this.value.y, bounds.max.y, new Vector(0, -1, 0), this.delta.y, (vel) => vel > 0.5],
+            [this.value.z, bounds.min.z, new Vector(0, 0, 1), this.delta.z, (vel) => vel < -0.5],
+            [this.value.z, bounds.max.z, new Vector(0, 0, -1), this.delta.z, (vel) => vel > 0.5]
         ];
 
         for (const [pos, boundary, direction, velocity, isMovingTowards] of boundaries) {
             const distance = Math.abs(pos - boundary);
             if (distance < avoidanceDistance && isMovingTowards(velocity)) {
-                // Strength is proportional to velocity/distance (inversely proportional to collision time)
-                const velocityTowardsWall = Math.abs(velocity);
-                const strength = Math.min(velocityTowardsWall / distance, 1.0); // Cap at 1.0 to prevent extreme forces
-                const force = direction.multiply(strength * forceMultiplier);
-                avoidanceForce.addInPlace(force);
+                const strength = Math.min(Math.abs(velocity) / distance, 1.0);
+                avoidanceForce.addInPlace(direction.multiply(strength * forceMultiplier));
             }
         }
 
@@ -87,34 +62,20 @@ export class Position extends Factor<Vector> {
         if (this.shouldConstrain) {
             const bounds = getTankBounds();
             
-            // Apply wall avoidance force before boundary constraints
             const wallAvoidanceForce = this.calculateWallAvoidanceForce();
             if (wallAvoidanceForce.magnitude() > 0) {
                 this.applyAcceleration(wallAvoidanceForce, 1);
             }
             
-            const constrained = this.value.constrainVector(
-                bounds.min,
-                bounds.max
-            );
+            const constrained = this.value.constrainVector(bounds.min, bounds.max);
 
-            // Check if we're at any boundaries and bounce accordingly
-            if (constrained.x !== this.value.x) {
-                this.delta.x *= -1;
-                this.ddelta.x *= -1;  // Also reflect the acceleration
-            }
-            if (constrained.y !== this.value.y) {
-                this.delta.y *= -1;
-                this.ddelta.y *= -1;  // Also reflect the acceleration
-            }
-            if (constrained.z !== this.value.z) {
-                this.delta.z *= -1;
-                this.ddelta.z *= -1;  // Also reflect the acceleration
-            }
+            // Bounce when hitting boundaries
+            if (constrained.x !== this.value.x) { this.delta.x *= -1; this.ddelta.x *= -1; }
+            if (constrained.y !== this.value.y) { this.delta.y *= -1; this.ddelta.y *= -1; }
+            if (constrained.z !== this.value.z) { this.delta.z *= -1; this.ddelta.z *= -1; }
             this.value = constrained;
         }
 
-        // Handle temporary acceleration duration
         if (this.accelerationDuration > 0) {
             this.accelerationDuration--;
             if (this.accelerationDuration === 0) {
@@ -122,7 +83,6 @@ export class Position extends Factor<Vector> {
             }
         }
 
-        // Apply speed decay
         this.delta.multiplyInPlace(this.decay);
     }
-} 
+}

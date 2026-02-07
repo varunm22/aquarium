@@ -13,14 +13,11 @@ export class Factor<T extends Vector | number> {
 
     update(): void {
         if (typeof this.value === 'number') {
-            const v = this.value as number;
-            const d = this.delta as number;
-            const dd = this.ddelta as number;
-            this.value = (v + d) as T;
-            this.delta = (d + dd) as T;
+            this.value = ((this.value as number) + (this.delta as number)) as T;
+            this.delta = ((this.delta as number) + (this.ddelta as number)) as T;
         } else {
             (this.value as Vector).addInPlace(this.delta as Vector);
             (this.delta as Vector).addInPlace(this.ddelta as Vector);
         }
     }
-} 
+}

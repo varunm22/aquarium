@@ -7,11 +7,8 @@ export class Factor {
     }
     update() {
         if (typeof this.value === 'number') {
-            const v = this.value;
-            const d = this.delta;
-            const dd = this.ddelta;
-            this.value = (v + d);
-            this.delta = (d + dd);
+            this.value = (this.value + this.delta);
+            this.delta = (this.delta + this.ddelta);
         }
         else {
             this.value.addInPlace(this.delta);

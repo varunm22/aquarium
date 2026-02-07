@@ -1,28 +1,17 @@
 import { Vector } from './vector.js';
 
-// Tank dimensions and positioning will be calculated relative to these base values
 export const TANK_CONSTANTS = {
-    // Base position and dimensions
     X: 75,
     Y: 200,
     WIDTH: 700,
     HEIGHT: 430,
     DEPTH: 400,
-    
-    // Gravel settings
     GRAVEL_HEIGHT: 20,
-    
-    // Water level (as percentage from top)
     WATER_LEVEL_PERCENT: 0.1,
-    
-    // Back pane scale (relative to front)
     BACK_SCALE: 0.7,
-    
-    // Movement bounds
-    MIN_Z: 20,  // Minimum z-coordinate for fish movement
+    MIN_Z: 20,
 } as const;
 
-// Derived constants can be calculated here
 export function getTankBounds() {
     return {
         min: new Vector(
@@ -36,4 +25,4 @@ export function getTankBounds() {
             TANK_CONSTANTS.DEPTH
         )
     };
-} 
+}

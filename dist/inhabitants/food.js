@@ -4,78 +4,58 @@ import { getTankBounds } from '../constants.js';
 export class Food {
     constructor(x, y, z) {
         this.tank = null;
-        // Start above the water with no initial velocity
-        this.position = new Position(new Vector(x, y, z), new Vector(0, 0, 0), false); // false = no constraints initially
+        this.position = new Position(new Vector(x, y, z), new Vector(0, 0, 0), false);
         this.size = 3;
         this.inWater = false;
-        this.floating = false; // Start not floating
-        this.settled = false; // Start unsettled
+        this.floating = false;
+        this.settled = false;
     }
     setTank(tank) {
         this.tank = tank;
     }
     update() {
-        // Don't update if food has settled at the bottom
-        if (this.settled) {
+        if (this.settled)
             return;
-        }
         if (!this.inWater) {
-            // Apply constant downward acceleration when not in water
-            this.position.delta.y += 0.4; // Same as fish falling
-            // Check if food has reached the water surface
+            this.position.delta.y += 0.4;
             const bounds = getTankBounds();
             if (this.position.y >= bounds.min.y) {
                 this.inWater = true;
-                this.floating = true; // Start floating when hitting water
-                this.position.setShouldConstrain(true); // Enable constraints when entering water
-                // Stop all movement when starting to float
+                this.floating = true;
+                this.position.setShouldConstrain(true);
                 this.position.delta = Vector.zero();
                 this.position.ddelta = Vector.zero();
             }
         }
         else if (this.floating) {
-            // While floating, 0.1% chance per frame to start sinking
+            // 0.1% chance per frame to start sinking
             if (Math.random() < 0.001) {
                 this.floating = false;
             }
-            // Don't apply any downward acceleration while floating
         }
         else {
-            // In water and not floating - continue sinking with reduced gravity
             this.position.delta.y += 0.02;
-            // Add small random drift occasionally
-            if (Math.random() < 0.25) { // 25% chance each frame
-                const drift = Vector.random(-0.1, 0.1);
-                this.position.applyAcceleration(drift, 2);
+            if (Math.random() < 0.25) {
+                this.position.applyAcceleration(Vector.random(-0.1, 0.1), 2);
             }
         }
-        // Update position (only if not floating, since floating food should stay put)
         if (!this.floating) {
             this.position.update();
         }
-        // Check if food has reached the bottom and should settle
         if (!this.floating && this.isAtBottom()) {
             this.settled = true;
-            // Stop all movement
             this.position.delta = Vector.zero();
             this.position.ddelta = Vector.zero();
         }
     }
     render(tank) {
-        // Use the same rendering approach as inhabitants
-        const relativeDepth = this.position.z / tank.depth;
-        const renderX = lerp(tank.x, tank.backX, relativeDepth) + (this.position.x - tank.x) * lerp(1, 0.7, relativeDepth);
-        const renderY = lerp(tank.y, tank.backY, relativeDepth) + (this.position.y - tank.y) * lerp(1, 0.7, relativeDepth);
-        // Scale size based on depth
-        const renderSize = this.size * lerp(1, 0.7, relativeDepth);
-        // Render as a brown circle
-        fill(139, 69, 19); // Brown color
+        const { x: renderX, y: renderY, depthScale } = tank.getRenderPosition(this.position.value);
+        fill(139, 69, 19);
         noStroke();
-        ellipse(renderX, renderY, renderSize, renderSize);
+        ellipse(renderX, renderY, this.size * depthScale, this.size * depthScale);
     }
-    // Check if food has reached the bottom
     isAtBottom() {
         const bounds = getTankBounds();
-        return this.position.y >= bounds.max.y - 2; // Within 2 units of the bottom
+        return this.position.y >= bounds.max.y - 2;
     }
 }

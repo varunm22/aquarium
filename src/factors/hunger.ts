@@ -23,21 +23,13 @@ export class Hunger extends Factor<number> {
 
     update(): void {
         super.update();
-        
-        // Increase hunger at the configured rate
         this.value = Math.min(1, this.value + this.increaseRate);
-        
-        // Constrain hunger to reasonable bounds
         this.value = Math.max(0, Math.min(this.value, 1));
 
-        // Decrease isEating counter if active
-        if (this.isEating > 0) {
-            this.isEating--;
-        }
+        if (this.isEating > 0) this.isEating--;
 
-        // Gradually weaken smelled food direction over time
         if (this.smelledFoodDirection) {
-            this.smelledFoodDirection.multiplyInPlace(0.98); // Decay the smell over time
+            this.smelledFoodDirection.multiplyInPlace(0.98);
             if (this.smelledFoodDirection.magnitude() < 0.01) {
                 this.smelledFoodDirection = null;
             }
@@ -54,25 +46,11 @@ export class Hunger extends Factor<number> {
         this.target = null;
     }
 
-    startEating(): void {
-        this.isEating = 10;
-    }
-
-    setFeeding(feeding: boolean): void {
-        this.feeding = feeding;
-    }
-
-    isFeeding(): boolean {
-        return this.feeding;
-    }
-
-    setSmelledFoodDirection(direction: Vector | null): void {
-        this.smelledFoodDirection = direction;
-    }
-
-    getSmelledFoodDirection(): Vector | null {
-        return this.smelledFoodDirection;
-    }
+    startEating(): void { this.isEating = 10; }
+    setFeeding(feeding: boolean): void { this.feeding = feeding; }
+    isFeeding(): boolean { return this.feeding; }
+    setSmelledFoodDirection(direction: Vector | null): void { this.smelledFoodDirection = direction; }
+    getSmelledFoodDirection(): Vector | null { return this.smelledFoodDirection; }
 
     updateFeedingMode(food_in_view: (Inhabitant | Food)[], hasSmellOfFood: boolean): void {
         const currentHunger = this.value;
@@ -80,47 +58,32 @@ export class Hunger extends Factor<number> {
         const hasFoodPresence = hasFoodInSight || hasSmellOfFood;
         
         if (!this.feeding) {
-            // Not currently in feeding mode - check if we should enter
             let probability = 0;
-            
             if (hasFoodPresence) {
-                // If food detected (sight or smell): enter feeding mode with probability = current hunger (only if hunger > 0.1)
                 if (currentHunger > 0.1) {
                     probability = currentHunger / 10;
-                    // Slightly higher probability if we can actually see food vs just smell it
-                    if (hasFoodInSight) {
-                        probability *= 1.2;
-                    }
+                    if (hasFoodInSight) probability *= 1.2;
                 }
-            } else {
-                // If no food detected: enter feeding mode with probability = current hunger / 100 (only if hunger > 0.5)
-                if (currentHunger > 0.5) {
-                    probability = currentHunger / 200;
-                }
+            } else if (currentHunger > 0.5) {
+                probability = currentHunger / 200;
             }
-            
-            if (Math.random() < probability) {
-                this.feeding = true;
-            }
+            if (Math.random() < probability) this.feeding = true;
         } else {
-            // Currently in feeding mode - check if we should leave
+            // Leave feeding mode when no food detected, with probability inversely proportional to hunger
             if (!hasFoodPresence) {
-                // If no food detected: leave feeding mode with probability = (1-hunger)/100
-                const probability = (1 - currentHunger) / 100;
-                if (Math.random() < probability) {
+                if (Math.random() < (1 - currentHunger) / 100) {
                     this.feeding = false;
                 }
             }
-            // If food detected (sight or smell), stay in feeding mode
         }
     }
 
     exitFeedingDueToFear(): void {
         this.feeding = false;
-        this.smelledFoodDirection = null; // Clear smell when scared
+        this.smelledFoodDirection = null;
     }
 
     setTarget(target: Inhabitant | Food | null): void {
         this.target = target;
     }
-} 
+}
