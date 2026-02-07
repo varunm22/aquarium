@@ -5,21 +5,20 @@ import { Tank } from '../tank.js';
 import { Food } from './food.js';
 import { Hunger } from '../factors/hunger.js';
 import { EggClump } from './egg_clump.js';
-import { TANK_CONSTANTS, getTankBounds } from '../constants.js';
+import { getTankBounds } from '../constants.js';
 import { Wall, WallPoint, WALL_CONFIG, world3DToWall2D, wall2DToWorld3D as sharedWall2DToWorld3D, wall2DToWorld3DVelocity as sharedWall2DVelocity, getWall2DBounds as sharedGetWall2DBounds, getOppositeWall, getAdjacentWalls } from '../wall-utils.js';
 
-declare function lerp(start: number, stop: number, amt: number): number;
 declare function push(): void;
 declare function pop(): void;
-declare function fill(r: number, g: number, b: number, a?: number): void;
-declare function noStroke(): void;
-declare function ellipse(x: number, y: number, w: number, h: number): void;
 declare function random(): number;
 declare function image(img: p5.Image, x: number, y: number, w: number, h: number, sx: number, sy: number, sw: number, sh: number): void;
 declare function loadImage(path: string): p5.Image;
 declare function translate(x: number, y: number): void;
 declare function rotate(angle: number): void;
 declare function scale(x: number, y: number): void;
+declare function tint(r: number, g: number, b: number, a?: number): void;
+declare function tint(gray: number, alpha: number): void;
+declare function noTint(): void;
 
 declare namespace p5 {
   interface Color {}
@@ -35,25 +34,24 @@ interface SpriteConfig {
 
 // Lifecycle timing (frames at 60fps)
 const EGG_LAYING_FRAMES = 120;
-const DYING_FRAMES = 1000;
 const DEAD_FADE_FRAMES = 1800;
-const SHELL_GRAVITY = 0.2;
+const SHELL_GRAVITY = 0.5;
 
 // Reproduction & growth
-const EGG_HUNGER_THRESHOLD = 0.2;
+const EGG_HUNGER_THRESHOLD = 0.30;
 const EGG_MIN_SIZE = 15;
-const EGG_CHANCE_PER_FRAME = 0.0002;
+const EGG_CHANCE_PER_FRAME = 0.0005;
 const STARVATION_DEATH_CHANCE = 0.1;
-const POST_EGG_HUNGER_COST = 0.75;
+const POST_EGG_HUNGER_COST = 0.50;
 const GROWTH_HUNGER_COST = 0.05;
 const GROWTH_CHANCE_DIVISOR = 500;
 
 // Movement & eating
-const ACCEL_COEFFICIENT = 0.042;
+const ACCEL_COEFFICIENT = 0.063;
 const EATING_SPEED_THRESHOLD = 80;
 const EATING_SPEED_REDUCTION = 0.85;
 const MAX_EATING_COUNTER = 200;
-const EATING_COUNTER_DECAY = 0.4;
+const EATING_COUNTER_DECAY = 2.0;
 
 // Navigation
 const HOTSPOT_MAX_DISTANCE = 600;
@@ -70,6 +68,7 @@ const ALGAE_HUNGER_RATE = 0.005;
 const FOOD_HUNGER_DECREASE = 0.05;
 const FOOD_EATING_BOOST = 50;
 const BASE_HUNGER_SIZE = 20;
+const BASE_HUNGER_INCREASE_RATE = 0.0001;
 
 // Rendering
 const SNAIL_SPRITE_HEIGHT = 32;
@@ -111,7 +110,6 @@ export class Snail extends Inhabitant {
     private opacity: number = 255;
     public readonly id: string;
     
-    private shellFalling: boolean = false;
     private shellSettled: boolean = false;
 
     constructor(size: number = 20, initialPosition?: Vector, initialWall?: Wall, initialHunger?: number) {
@@ -137,7 +135,7 @@ export class Snail extends Inhabitant {
         this.wall = startWall;
         
         const hungerValue = initialHunger !== undefined ? initialHunger : 0.2;
-        this.hunger = new Hunger(hungerValue, 0, 0.0001);
+        this.hunger = new Hunger(hungerValue, 0, BASE_HUNGER_INCREASE_RATE * (size / BASE_HUNGER_SIZE));
         this.id = Math.random().toString(36).substring(2, 8);
         
         this.setNewGoal();
@@ -247,13 +245,18 @@ export class Snail extends Inhabitant {
         let bestTarget: WallPoint | null = null;
         let bestScore = -1;
 
+        // Smaller snails sense algae over a shorter range and prioritize nearness more
+        const sizeFraction = this.size / this.maxSize;
+        const sensingRange = HOTSPOT_MAX_DISTANCE * (0.3 + 0.7 * sizeFraction);
+        const distancePenalty = HOTSPOT_SCORE_OFFSET * (1 + 2 * (1 - sizeFraction));
+
         for (const hotspot of this.tank.algae.getAlgaeHotspots()) {
             const hotspotPos = sharedWall2DToWorld3D({ wall: hotspot.wall, x: hotspot.centerX, y: hotspot.centerY }, this.wallOffset);
             const distance = this.wallDistance(pos, this.wall, hotspotPos, hotspot.wall);
             
-            if (distance > HOTSPOT_MAX_DISTANCE) continue;
+            if (distance > sensingRange) continue;
 
-            const score = hotspot.strength / (distance + HOTSPOT_SCORE_OFFSET);
+            const score = hotspot.strength / (distance + distancePenalty);
             if (score > bestScore) {
                 bestScore = score;
                 bestTarget = { wall: hotspot.wall, x: hotspot.centerX, y: hotspot.centerY };
@@ -452,9 +455,9 @@ export class Snail extends Inhabitant {
         }
     }
 
-    /** Acceleration scales with sqrt(size); eating reduces speed via sqrt curve */
+    /** Acceleration scales with log(size); eating reduces speed via sqrt curve */
     private getAcceleration(): number {
-        const baseAccel = ACCEL_COEFFICIENT * Math.sqrt(this.size);
+        const baseAccel = ACCEL_COEFFICIENT * Math.log(this.size);
         const eatingFraction = Math.min(1, this.eatingCounter / EATING_SPEED_THRESHOLD);
         const eatingMultiplier = 1 - EATING_SPEED_REDUCTION * Math.sqrt(eatingFraction);
         return baseAccel * eatingMultiplier;
@@ -676,7 +679,9 @@ export class Snail extends Inhabitant {
             }
         }
 
-        const growthChance = (1 - this.hunger.value) / GROWTH_CHANCE_DIVISOR;
+        const fullness = 1 - this.hunger.value;
+        const sizeModifier = BASE_HUNGER_SIZE / this.size;
+        const growthChance = (fullness * fullness * (3 - 2 * fullness)) * sizeModifier / GROWTH_CHANCE_DIVISOR;
         if (this.size < this.maxSize && Math.random() < growthChance) {
             this.grow();
         }
@@ -685,6 +690,7 @@ export class Snail extends Inhabitant {
     private grow(): void {
         this.size += 1;
         this.hunger.value = Math.min(1, this.hunger.value + GROWTH_HUNGER_COST);
+        this.hunger.increaseRate = BASE_HUNGER_INCREASE_RATE * (this.size / BASE_HUNGER_SIZE);
         this.wallOffset = this.size / 2;
     }
 
@@ -718,26 +724,24 @@ export class Snail extends Inhabitant {
     }
 
     private enterDyingPhase(): void {
-        this.lifeState = 'dying';
-        this.lifeStateCounter = 0;
         this.canSetGoals = false;
         this.position.delta = Vector.zero();
-        console.log(`💀 Snail entering dying phase at (${this.position.value.x.toFixed(1)}, ${this.position.value.y.toFixed(1)}, ${this.position.value.z.toFixed(1)}) on ${this.wall} wall`);
+        console.log(`💀 Snail dying at (${this.position.value.x.toFixed(1)}, ${this.position.value.y.toFixed(1)}, ${this.position.value.z.toFixed(1)}) on ${this.wall} wall — switching to shell`);
+        // Skip the dying state and go directly to shell phase:
+        // the shell sprite should appear immediately, then fall and fade.
+        this.enterShellPhase();
     }
 
     private updateDyingPhase(): void {
-        this.lifeStateCounter++;
-        this.opacity = Math.max(0, 255 - (this.lifeStateCounter * 255 / DYING_FRAMES));
-        if (this.lifeStateCounter >= DYING_FRAMES) {
-            this.enterShellPhase();
-        }
+        // Dying phase is now skipped (enterDyingPhase transitions straight to shell),
+        // but keep this method in case the state is reached unexpectedly.
+        this.enterShellPhase();
     }
 
     private enterShellPhase(): void {
         this.lifeState = 'shell';
         this.lifeStateCounter = 0;
         this.canSetGoals = false;
-        this.shellFalling = true;
         this.shellSettled = false;
         this.opacity = 255;
         this.wall = 'bottom';
@@ -756,10 +760,13 @@ export class Snail extends Inhabitant {
     }
 
     private updateShellFalling(): void {
-        this.position.delta.y += SHELL_GRAVITY;
+        // Smaller shells sink more slowly (gravity scales linearly with size)
+        const sizeScaledGravity = SHELL_GRAVITY * (this.size / this.maxSize);
+        this.position.delta.y += sizeScaledGravity;
         
         const bounds = this.bounds;
-        const gravelSurface = bounds.max.y - TANK_CONSTANTS.GRAVEL_HEIGHT;
+        // bounds.max.y is already the gravel surface (Y + HEIGHT - GRAVEL_HEIGHT)
+        const gravelSurface = bounds.max.y;
         if (this.position.value.y >= gravelSurface - this.wallOffset) {
             this.shellSettled = true;
             this.position.delta = Vector.zero();
@@ -843,21 +850,42 @@ export class Snail extends Inhabitant {
         let mirrored: boolean;
         let baseRotation: number = 0;
         
-        // Octant-based sprite mapping
-        if (degrees >= 337.5 || degrees < 22.5) {
-            spriteIndex = 0; mirrored = false;
-        } else if (degrees >= 22.5 && degrees < 67.5) {
-            spriteIndex = 1; mirrored = false;
-        } else if (degrees >= 67.5 && degrees < 112.5) {
-            spriteIndex = 2; mirrored = false;
-        } else if (degrees >= 112.5 && degrees < 157.5) {
-            spriteIndex = 1; mirrored = true;
-        } else if (degrees >= 157.5 && degrees < 202.5) {
-            spriteIndex = 0; mirrored = true;
-        } else if (degrees >= 202.5 && degrees < 292.5) {
-            spriteIndex = 3; mirrored = false;
+        // Angle-based sprite mapping
+        // Side walls use wider front/back ranges and narrower vertical-motion ranges
+        // to better match the perspective viewing angle
+        const isSideWall = this.wall === 'left' || this.wall === 'right';
+        if (isSideWall) {
+            if (degrees >= 345 || degrees < 15) {
+                spriteIndex = 0; mirrored = false;
+            } else if (degrees >= 15 && degrees < 55) {
+                spriteIndex = 1; mirrored = false;
+            } else if (degrees >= 55 && degrees < 125) {
+                spriteIndex = 2; mirrored = false;
+            } else if (degrees >= 125 && degrees < 165) {
+                spriteIndex = 1; mirrored = true;
+            } else if (degrees >= 165 && degrees < 195) {
+                spriteIndex = 0; mirrored = true;
+            } else if (degrees >= 195 && degrees < 305) {
+                spriteIndex = 3; mirrored = false;
+            } else {
+                spriteIndex = 0; mirrored = false;
+            }
         } else {
-            spriteIndex = 0; mirrored = false;
+            if (degrees >= 337.5 || degrees < 22.5) {
+                spriteIndex = 0; mirrored = false;
+            } else if (degrees >= 22.5 && degrees < 67.5) {
+                spriteIndex = 1; mirrored = false;
+            } else if (degrees >= 67.5 && degrees < 112.5) {
+                spriteIndex = 2; mirrored = false;
+            } else if (degrees >= 112.5 && degrees < 157.5) {
+                spriteIndex = 1; mirrored = true;
+            } else if (degrees >= 157.5 && degrees < 202.5) {
+                spriteIndex = 0; mirrored = true;
+            } else if (degrees >= 202.5 && degrees < 292.5) {
+                spriteIndex = 3; mirrored = false;
+            } else {
+                spriteIndex = 0; mirrored = false;
+            }
         }
         
         if (this.wall === 'left') {
@@ -873,8 +901,13 @@ export class Snail extends Inhabitant {
         const { x: renderX, y: renderY, depthScale } = tank.getRenderPosition(this.position.value);
         const { index, rotation, mirrored } = this.getSpriteIndexAndRotation();
         
-        const finalIndex = (this.lifeState === 'shell' || this.lifeState === 'dead') ? 6 : index;
+        const isShellState = this.lifeState === 'shell' || this.lifeState === 'dead';
+        const finalIndex = isShellState ? 6 : index;
         const finalSpriteConfig = Snail.SPRITE_CONFIGS[finalIndex];
+        
+        // Shell/dead states render upright with no wall-based rotation
+        const finalRotation = isShellState ? 0 : rotation;
+        const finalMirrored = isShellState ? false : mirrored;
         
         const scale_size = (this.size * depthScale) / SNAIL_SPRITE_HEIGHT;
         const spriteWidth = finalSpriteConfig.width * scale_size;
@@ -882,20 +915,16 @@ export class Snail extends Inhabitant {
         
         push();
         translate(renderX, renderY);
-        rotate(rotation);
+        rotate(finalRotation);
         
-        if (mirrored) {
+        if (finalMirrored) {
             scale(-1, 1);
         }
         
-        if (this.opacity < 255) {
-            // p5.js doesn't support alpha in image() — use ellipse fallback for dying/dead snails
-            pop();
-            push();
-            fill(139, 69, 19, Math.floor(this.opacity));
-            noStroke();
-            ellipse(0, 0, spriteWidth, spriteHeight);
-        } else if (Snail.spritesheet) {
+        if (Snail.spritesheet) {
+            if (this.opacity < 255) {
+                tint(255, Math.floor(this.opacity));
+            }
             image(
                 Snail.spritesheet,
                 -spriteWidth/2, -spriteHeight/2,
@@ -903,6 +932,9 @@ export class Snail extends Inhabitant {
                 finalSpriteConfig.x, finalSpriteConfig.y,
                 finalSpriteConfig.width, finalSpriteConfig.height
             );
+            if (this.opacity < 255) {
+                noTint();
+            }
         }
         
         pop();

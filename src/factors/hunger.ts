@@ -4,7 +4,7 @@ import { Food } from '../inhabitants/food.js';
 import { Vector } from '../vector.js';
 
 export class Hunger extends Factor<number> {
-    private increaseRate: number;
+    public increaseRate: number;
     public inStrike: boolean;
     public target: Inhabitant | Food | null;
     public isEating: number;
