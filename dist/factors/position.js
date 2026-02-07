@@ -2,10 +2,11 @@ import { Factor } from './factor.js';
 import { Vector } from '../vector.js';
 import { getTankBounds } from '../constants.js';
 export class Position extends Factor {
-    constructor(value, delta, shouldConstrain = true) {
+    constructor(value, delta, shouldConstrain = true, decay = 0.96) {
         super(value, delta);
         this.accelerationDuration = 0;
         this.shouldConstrain = shouldConstrain;
+        this.decay = decay;
     }
     get x() {
         return this.value.x;
@@ -96,6 +97,6 @@ export class Position extends Factor {
             }
         }
         // Apply speed decay
-        this.delta.multiplyInPlace(0.96);
+        this.delta.multiplyInPlace(this.decay);
     }
 }

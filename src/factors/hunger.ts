@@ -11,9 +11,9 @@ export class Hunger extends Factor<number> {
     public feeding: boolean;
     public smelledFoodDirection: Vector | null;
 
-    constructor(value: number = 0, delta: number = 0) {
+    constructor(value: number = 0, delta: number = 0, increaseRate: number = 0.0003) {
         super(value, delta);
-        this.increaseRate = 0;
+        this.increaseRate = increaseRate;
         this.inStrike = false;
         this.target = null;
         this.isEating = 0;
@@ -24,8 +24,7 @@ export class Hunger extends Factor<number> {
     update(): void {
         super.update();
         
-        // Randomly increase hunger at a slow rate
-        this.increaseRate = Math.random() * 0.0003;
+        // Increase hunger at the configured rate
         this.value = Math.min(1, this.value + this.increaseRate);
         
         // Constrain hunger to reasonable bounds

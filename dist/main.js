@@ -1,6 +1,7 @@
 import { Tank } from './tank.js';
 import { EmberTetra } from './inhabitants/embertetra.js';
-import { Snail } from './inhabitants/snail.js';
+// import { Snail } from './inhabitants/snail.js';
+import { Snail } from './inhabitants/snail_new.js';
 import { SidePane } from './sidepane.js';
 import { getTankBounds } from './constants.js';
 let tank;
@@ -52,8 +53,9 @@ function setup() {
     // let userFish = new UserFish(425, 400, 200, 30); // Start in the middle of the tank
     // tank.addFish(userFish); // Add to the tank inhabitants
     // Add a snail on a random wall
-    for (let i = 0; i < 2; i++) {
-        const snail = new Snail(20); // Pass debug display to snail
+    for (let i = 0; i < 1; i++) {
+        const snail = new Snail(28); // Pass debug display to snail
+        snail.setTank(tank); // Set tank reference for reproduction
         tank.addFish(snail); // Add to the tank inhabitants
     }
 }
@@ -64,8 +66,26 @@ function draw() {
     tank.render();
     // Render the side pane
     sidePane.render(tank);
+    // Update debug info
+    updateDebugInfo();
     // Render debug display
     debugDisplay.render();
+}
+function updateDebugInfo() {
+    const snails = tank.getSnails();
+    let normalSnails = 0;
+    snails.forEach(snail => {
+        switch (snail.getLifeState()) {
+            case 'normal':
+                normalSnails++;
+                break;
+        }
+    });
+    debugDisplay.updateInfo('Snails', `Total: ${snails.length} | Normal: ${normalSnails}`);
+    if (snails.length > 0) {
+        const firstSnail = snails[0];
+        debugDisplay.updateInfo('First Snail', `Size: ${firstSnail.size} | Hunger: ${Math.round(firstSnail.getHungerValue() * 100)}% | State: ${firstSnail.getLifeState()}`);
+    }
 }
 window.setup = setup;
 window.draw = draw;

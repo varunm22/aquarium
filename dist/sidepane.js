@@ -1,7 +1,7 @@
 import { EmberTetra } from './inhabitants/embertetra.js';
 import { UserFish } from './inhabitants/userfish.js';
 import { Fish } from './inhabitants/fish.js';
-import { Snail } from './inhabitants/snail.js';
+import { Snail } from './inhabitants/snail_new.js';
 import { getTankBounds } from './constants.js';
 // p5.js constants
 const CENTER = 'center';
@@ -238,7 +238,7 @@ export class SidePane {
     renderSpeciesView(tank) {
         // Get counts for each species
         const emberTetraCount = tank.fish.filter(fish => fish instanceof EmberTetra && !(fish instanceof UserFish)).length;
-        const snailCount = tank.fish.filter(fish => fish instanceof Snail).length;
+        const snailCount = tank.getSnails().length;
         const species = [
             { type: 'embertetra', count: emberTetraCount, label: 'Ember Tetras' },
             { type: 'snail', count: snailCount, label: 'Snails' }
@@ -273,9 +273,8 @@ export class SidePane {
                 .sort((a, b) => a.id.localeCompare(b.id));
         }
         else if (this.selectedSpecies === 'snail') {
-            inhabitants = tank.fish
-                .filter(fish => fish instanceof Snail)
-                .sort((a, b) => { var _a; return ((_a = a.id) === null || _a === void 0 ? void 0 : _a.localeCompare(b.id)) || 0; });
+            inhabitants = tank.getSnails()
+                .sort((a, b) => a.id.localeCompare(b.id));
         }
         // Calculate max scroll
         const totalHeight = inhabitants.length * this.rowHeight;
@@ -450,13 +449,13 @@ export class SidePane {
             text(`Hunger: ${hungerValue}%${feedingStatus}`, infoX, infoY + 9);
         }
         else if (fish instanceof Snail) {
-            // Size information
-            text(`Size: ${fish.size}`, infoX, infoY - 9);
-            // Fullness information (eating counter)
-            const fullnessValue = Math.round(fish.getEatingCounter());
-            const fullnessPercent = Math.round((fullnessValue / 200) * 100); // Max eating counter is 200
-            const fullnessStatus = fullnessValue > 100 ? ' - full' : fullnessValue > 50 ? ' - satisfied' : ' - hungry';
-            text(`Fullness: ${fullnessPercent}%${fullnessStatus}`, infoX, infoY + 9);
+            // Size and wall information
+            text(`Size: ${fish.size} | Wall: ${fish.getWall()}`, infoX, infoY - 9);
+            // Hunger and life state information
+            const hungerValue = Math.round(fish.getHungerValue() * 100);
+            const lifeState = fish.getLifeState();
+            const lifeStateText = lifeState === 'normal' ? '' : ` - ${lifeState}`;
+            text(`Hunger: ${hungerValue}%${lifeStateText}`, infoX, infoY + 9);
         }
         pop();
         // Add delete button
@@ -478,9 +477,14 @@ export class SidePane {
         if (this.mouseWasPressed && !mouseIsPressed) {
             if (mouseX >= deleteButtonX && mouseX <= deleteButtonX + deleteButtonSize &&
                 mouseY >= deleteButtonY && mouseY <= deleteButtonY + deleteButtonSize) {
-                const index = this.tank.fish.indexOf(fish);
-                if (index > -1) {
-                    this.tank.fish.splice(index, 1);
+                if (fish instanceof Snail) {
+                    this.tank.removeSnail(fish);
+                }
+                else {
+                    const index = this.tank.fish.indexOf(fish);
+                    if (index > -1) {
+                        this.tank.fish.splice(index, 1);
+                    }
                 }
             }
         }

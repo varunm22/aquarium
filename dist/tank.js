@@ -2,6 +2,7 @@ import { TANK_CONSTANTS } from './constants.js';
 import { Microfauna } from './inhabitants/microfauna.js';
 import { Food } from './inhabitants/food.js';
 import { Algae } from './inhabitants/algae.js';
+import { Snail } from './inhabitants/snail_new.js';
 import { Position } from './factors/position.js';
 import { Vector } from './vector.js';
 export class Tank {
@@ -29,6 +30,7 @@ export class Tank {
         this.microfauna = [];
         this.food = []; // Initialize food array
         this.algae = new Algae(); // Initialize algae system
+        this.eggClumps = []; // Initialize egg clumps array
         // Initialize 10 microfauna in random positions in bottom 100 pixels
         for (let i = 0; i < 10; i++) {
             const x = Math.random() * this.width + this.x;
@@ -43,6 +45,18 @@ export class Tank {
     addFish(fish) {
         this.fish.push(fish);
     }
+    addSnail(snail) {
+        this.fish.push(snail);
+    }
+    removeSnail(snail) {
+        const index = this.fish.indexOf(snail);
+        if (index > -1) {
+            this.fish.splice(index, 1);
+        }
+    }
+    getSnails() {
+        return this.fish.filter(fish => fish instanceof Snail);
+    }
     addMicrofauna(microfauna) {
         this.microfauna.push(microfauna);
     }
@@ -54,6 +68,16 @@ export class Tank {
         const index = this.food.indexOf(food);
         if (index > -1) {
             this.food.splice(index, 1);
+        }
+    }
+    addEggClump(eggClump) {
+        eggClump.setTank(this);
+        this.eggClumps.push(eggClump);
+    }
+    removeEggClump(eggClump) {
+        const index = this.eggClumps.indexOf(eggClump);
+        if (index > -1) {
+            this.eggClumps.splice(index, 1);
         }
     }
     // Add food particle at random position above tank, or at specified feeding spot
@@ -85,6 +109,24 @@ export class Tank {
         for (let microfauna of this.microfauna) {
             microfauna.update(allInhabitants);
         }
+        // Update egg clumps
+        for (let eggClump of this.eggClumps) {
+            eggClump.update(allInhabitants);
+        }
+        // Remove snails that should be removed (dying phase complete)
+        this.fish = this.fish.filter(fish => {
+            if (fish instanceof Snail && fish.shouldBeRemoved()) {
+                return false; // Remove this snail
+            }
+            return true;
+        });
+        // Remove egg clumps that should be removed (hatched)
+        this.eggClumps = this.eggClumps.filter(eggClump => {
+            if (eggClump.shouldBeRemoved()) {
+                return false; // Remove this egg clump
+            }
+            return true;
+        });
         // Update food particles
         for (let food of this.food) {
             food.update();
@@ -99,6 +141,8 @@ export class Tank {
         this.microfauna.sort((a, b) => b.position.z - a.position.z);
         // Sort food by depth
         this.food.sort((a, b) => b.position.z - a.position.z);
+        // Sort egg clumps by depth
+        this.eggClumps.sort((a, b) => b.position.z - a.position.z);
         // Render back pane (before any water layers)
         this.renderBack();
         // Render algae on walls
@@ -120,6 +164,12 @@ export class Tank {
                 food.render(this);
             }
         }
+        // Render egg clumps behind the first water layer
+        for (let eggClump of this.eggClumps) {
+            if (eggClump.position.z >= this.depth) {
+                eggClump.render(this);
+            }
+        }
         // Render water layers from back to front
         for (let i = this.numLayers - 1; i >= 0; i--) {
             const interp = i / this.numLayers;
@@ -136,6 +186,12 @@ export class Tank {
             for (let food of this.food) {
                 if (food.position.z >= layerZStart && food.position.z < layerZEnd) {
                     food.render(this);
+                }
+            }
+            // Render egg clumps that fall within this layer
+            for (let eggClump of this.eggClumps) {
+                if (eggClump.position.z >= layerZStart && eggClump.position.z < layerZEnd) {
+                    eggClump.render(this);
                 }
             }
             // Render the water layer itself
@@ -158,6 +214,12 @@ export class Tank {
         for (let food of this.food) {
             if (food.position.z < 0) {
                 food.render(this);
+            }
+        }
+        // Render egg clumps in front of the last water layer
+        for (let eggClump of this.eggClumps) {
+            if (eggClump.position.z < 0) {
+                eggClump.render(this);
             }
         }
         // Render front wall algae (after all water layers and inhabitants)

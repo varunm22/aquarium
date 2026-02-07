@@ -57,7 +57,7 @@ export class Inhabitant {
     // Interpolate 2D position based on depth
     const relativeDepth = this.position.z / tank.depth;
     const renderX = lerp(tank.x, tank.backX, relativeDepth) + (this.position.x - tank.x) * lerp(1, 0.7, relativeDepth);
-    const renderY = lerp(tank.y, tank.backY, relativeDepth) + (this.position.y - tank.y) * lerp(1, 0.7, relativeDepth);
+    const renderY = lerp(tank.y, tank.backY, relativeDepth) + (this.position.y - tank.y) * lerp(1, 0.667, relativeDepth);
 
     // Scale size based on depth
     const renderSize = this.size * lerp(1, 0.7, relativeDepth);

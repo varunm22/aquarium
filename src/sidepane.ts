@@ -3,7 +3,7 @@ import { Inhabitant } from './inhabitants/inhabitant.js';
 import { EmberTetra } from './inhabitants/embertetra.js';
 import { UserFish } from './inhabitants/userfish.js';
 import { Fish } from './inhabitants/fish.js';
-import { Snail } from './inhabitants/snail.js';
+import { Snail } from './inhabitants/snail_new.js';
 import { getTankBounds } from './constants.js';
 
 // Declare p5.js global functions
@@ -312,7 +312,7 @@ export class SidePane {
     private renderSpeciesView(tank: Tank): void {
         // Get counts for each species
         const emberTetraCount = tank.fish.filter(fish => fish instanceof EmberTetra && !(fish instanceof UserFish)).length;
-        const snailCount = tank.fish.filter(fish => fish instanceof Snail).length;
+        const snailCount = tank.getSnails().length;
         
         const species = [
             { type: 'embertetra' as const, count: emberTetraCount, label: 'Ember Tetras' },
@@ -353,9 +353,8 @@ export class SidePane {
                 .filter(fish => fish instanceof EmberTetra && !(fish instanceof UserFish))
                 .sort((a, b) => (a as Fish).id.localeCompare((b as Fish).id));
         } else if (this.selectedSpecies === 'snail') {
-            inhabitants = tank.fish
-                .filter(fish => fish instanceof Snail)
-                .sort((a, b) => (a as any).id?.localeCompare((b as any).id) || 0);
+            inhabitants = tank.getSnails()
+                .sort((a, b) => a.id.localeCompare(b.id));
         }
 
         // Calculate max scroll
@@ -603,14 +602,14 @@ export class SidePane {
             const feedingStatus = fish.isInFeedingMode() ? ' - feeding' : '';
             text(`Hunger: ${hungerValue}%${feedingStatus}`, infoX, infoY + 9);
         } else if (fish instanceof Snail) {
-            // Size information
-            text(`Size: ${fish.size}`, infoX, infoY - 9);
+            // Size and wall information
+            text(`Size: ${fish.size} | Wall: ${fish.getWall()}`, infoX, infoY - 9);
             
-            // Fullness information (eating counter)
-            const fullnessValue = Math.round(fish.getEatingCounter());
-            const fullnessPercent = Math.round((fullnessValue / 200) * 100); // Max eating counter is 200
-            const fullnessStatus = fullnessValue > 100 ? ' - full' : fullnessValue > 50 ? ' - satisfied' : ' - hungry';
-            text(`Fullness: ${fullnessPercent}%${fullnessStatus}`, infoX, infoY + 9);
+            // Hunger and life state information
+            const hungerValue = Math.round(fish.getHungerValue() * 100);
+            const lifeState = fish.getLifeState();
+            const lifeStateText = lifeState === 'normal' ? '' : ` - ${lifeState}`;
+            text(`Hunger: ${hungerValue}%${lifeStateText}`, infoX, infoY + 9);
         }
         pop();
 
@@ -636,9 +635,13 @@ export class SidePane {
         if (this.mouseWasPressed && !mouseIsPressed) {
             if (mouseX >= deleteButtonX && mouseX <= deleteButtonX + deleteButtonSize &&
                 mouseY >= deleteButtonY && mouseY <= deleteButtonY + deleteButtonSize) {
-                const index = this.tank.fish.indexOf(fish);
-                if (index > -1) {
-                    this.tank.fish.splice(index, 1);
+                if (fish instanceof Snail) {
+                    this.tank.removeSnail(fish);
+                } else {
+                    const index = this.tank.fish.indexOf(fish);
+                    if (index > -1) {
+                        this.tank.fish.splice(index, 1);
+                    }
                 }
             }
         }

@@ -22,7 +22,7 @@ interface AlgaeHotspot {
 export class Algae {
     private squareSize: number = 4;
     private newGrowthChance: number = 0.01; // 1% chance per frame for new algae
-    private spreadChance: number = 0.003; // 1% chance per frame for spreading
+    private spreadChance: number = 0.001; // 1% chance per frame for spreading
     private levelUpChance: number = 0.0001; // 1% chance per frame for level 1 to become level 2
     
     // Wall dimensions (calculated once)
@@ -59,6 +59,7 @@ export class Algae {
     // Algae hotspot tracking for snail navigation
     private algaeHotspots: AlgaeHotspot[] = [];
     private frameCounter: number = 0; // Add frame counter for more controlled updates
+    private lastHotspotUpdateFrame: number = 0; // Track when hotspots were last updated
 
     // Removed chunked rendering variables to eliminate flickering
 
@@ -138,8 +139,10 @@ export class Algae {
     }
 
     private calculateWallDimensions(): void {
-        // Include gravel area - algae can grow from water level to tank bottom
-        const totalHeight = TANK_CONSTANTS.HEIGHT * (1 - TANK_CONSTANTS.WATER_LEVEL_PERCENT);
+        // Algae grows from water level to gravel level (not tank bottom)
+        const waterLevelTop = TANK_CONSTANTS.Y + TANK_CONSTANTS.HEIGHT * TANK_CONSTANTS.WATER_LEVEL_PERCENT;
+        const gravelLevel = TANK_CONSTANTS.Y + TANK_CONSTANTS.HEIGHT - TANK_CONSTANTS.GRAVEL_HEIGHT;
+        const totalHeight = gravelLevel - waterLevelTop;
         
         // Front and back walls
         const frontWidth = TANK_CONSTANTS.WIDTH;
@@ -200,11 +203,6 @@ export class Algae {
         // Periodic cleanup of invalid cells (every ~1000 frames)
         if (this.fastRandom() < 0.001) {
             this.cleanupActiveCells();
-        }
-
-        // Update algae hotspots less frequently (every ~1000 frames instead of 1% chance)
-        if (this.frameCounter % 1000 === 0) {
-            this.updateAlgaeHotspots();
         }
     }
 
@@ -480,25 +478,21 @@ export class Algae {
     }
 
     // Public methods for snail interaction
-    public getAlgaeLevel(wall: 'front' | 'back' | 'left' | 'right', worldX: number, worldY: number, worldZ: number): number {
-        // Convert world coordinates to grid coordinates
-        const gridCoords = this.worldToGridCoordinates(wall, worldX, worldY, worldZ);
+    public getAlgaeLevel(wall: 'front' | 'back' | 'left' | 'right', wallX: number, wallY: number): number {
+        const gridCoords = this.wallToGridCoordinates(wall, wallX, wallY);
         if (!gridCoords) return 0;
         
-        const { gridX, gridY } = gridCoords;
-        
-        // Check bounds
         const wallDim = this.wallDimensions[wall];
-        if (gridX < 0 || gridX >= wallDim.gridCols || gridY < 0 || gridY >= wallDim.gridRows) {
+        if (gridCoords.gridX < 0 || gridCoords.gridX >= wallDim.gridCols || 
+            gridCoords.gridY < 0 || gridCoords.gridY >= wallDim.gridRows) {
             return 0;
         }
         
-        return this.wallGrids[wall][gridX][gridY];
+        return this.wallGrids[wall][gridCoords.gridX][gridCoords.gridY];
     }
 
-    public removeAlgae(wall: 'front' | 'back' | 'left' | 'right', worldX: number, worldY: number, worldZ: number): void {
-        // Convert world coordinates to grid coordinates
-        const gridCoords = this.worldToGridCoordinates(wall, worldX, worldY, worldZ);
+    public removeAlgae(wall: 'front' | 'back' | 'left' | 'right', wallX: number, wallY: number): void {
+        const gridCoords = this.wallToGridCoordinates(wall, wallX, wallY);
         if (!gridCoords) return;
         
         const { gridX, gridY } = gridCoords;
@@ -518,6 +512,31 @@ export class Algae {
             if (encoded !== -1) {
                 this.activeCells.delete(encoded);
             }
+        }
+    }
+
+    // Convert 2D wall coordinates to grid coordinates
+    private wallToGridCoordinates(wall: 'front' | 'back' | 'left' | 'right', wallX: number, wallY: number): { gridX: number, gridY: number } | null {
+        const waterLevelTop = TANK_CONSTANTS.Y + TANK_CONSTANTS.HEIGHT * TANK_CONSTANTS.WATER_LEVEL_PERCENT;
+        
+        // For all walls, wallY represents the actual Y coordinate in world space
+        // wallX represents different things based on the wall:
+        // - front/back walls: wallX = world X coordinate  
+        // - left/right walls: wallX = world Z coordinate
+        
+        switch (wall) {
+            case 'front':
+            case 'back':
+                return {
+                    gridX: Math.floor((wallX - TANK_CONSTANTS.X) / this.squareSize),
+                    gridY: Math.floor((wallY - waterLevelTop) / this.squareSize)
+                };
+            case 'left':
+            case 'right':
+                return {
+                    gridX: Math.floor((wallX - TANK_CONSTANTS.MIN_Z) / this.squareSize),
+                    gridY: Math.floor((wallY - waterLevelTop) / this.squareSize)
+                };
         }
     }
 
@@ -553,127 +572,105 @@ export class Algae {
     }
 
     private updateAlgaeHotspots(): void {
-        this.algaeHotspots = [];
-        const gridSize = 20; // Group algae into 20x20 pixel regions
-        const hotspotMap = new Map<string, AlgaeHotspot>();
-
-        // Process each active algae cell
-        for (const encodedCell of this.activeCells) {
-            const decodedCell = this.decodeCell(encodedCell);
-            if (!decodedCell) continue;
-
-            const { wall, x, y } = decodedCell;
-            const level = this.wallGrids[wall][x][y];
-            if (level === 0) continue;
-
-            // Convert grid coordinates to world coordinates
-            const worldCoords = this.gridToWorldCoordinates(wall, x, y);
-            if (!worldCoords) continue;
-
-            // Calculate hotspot region
-            const regionX = Math.floor(worldCoords.worldX / gridSize) * gridSize;
-            const regionY = Math.floor(worldCoords.worldY / gridSize) * gridSize;
-            const regionZ = Math.floor(worldCoords.worldZ / gridSize) * gridSize;
-            const regionKey = `${wall}-${regionX}-${regionY}-${regionZ}`;
-
-            // Add to or create hotspot
-            if (hotspotMap.has(regionKey)) {
-                const hotspot = hotspotMap.get(regionKey)!;
-                hotspot.strength += level;
-                hotspot.count++;
-                // Update center to be weighted average
-                hotspot.centerX = (hotspot.centerX * (hotspot.count - 1) + worldCoords.worldX) / hotspot.count;
-                hotspot.centerY = (hotspot.centerY * (hotspot.count - 1) + worldCoords.worldY) / hotspot.count;
-                hotspot.centerZ = (hotspot.centerZ * (hotspot.count - 1) + worldCoords.worldZ) / hotspot.count;
-            } else {
-                hotspotMap.set(regionKey, {
-                    wall,
-                    centerX: worldCoords.worldX,
-                    centerY: worldCoords.worldY,
-                    centerZ: worldCoords.worldZ,
-                    strength: level,
-                    count: 1
-                });
-            }
+        // Check if we've updated recently (less than 50 frames ago)
+        if (this.frameCounter - this.lastHotspotUpdateFrame < 50) {
+            return; // Don't recompute if updated recently
         }
-
-        // Convert map to array and sort by strength
-        this.algaeHotspots = Array.from(hotspotMap.values())
-            .filter(hotspot => hotspot.strength > 0)
-            .sort((a, b) => b.strength - a.strength);
-    }
-
-    private gridToWorldCoordinates(wall: 'front' | 'back' | 'left' | 'right', gridX: number, gridY: number): { worldX: number, worldY: number, worldZ: number } | null {
-        const waterLevelTop = TANK_CONSTANTS.Y + TANK_CONSTANTS.HEIGHT * TANK_CONSTANTS.WATER_LEVEL_PERCENT;
         
-        switch (wall) {
-            case 'front':
-                return {
-                    worldX: TANK_CONSTANTS.X + (gridX * this.squareSize) + (this.squareSize / 2),
-                    worldY: waterLevelTop + (gridY * this.squareSize) + (this.squareSize / 2),
-                    worldZ: TANK_CONSTANTS.MIN_Z + 5 // Wall offset
-                };
-            case 'back':
-                return {
-                    worldX: TANK_CONSTANTS.X + (gridX * this.squareSize) + (this.squareSize / 2),
-                    worldY: waterLevelTop + (gridY * this.squareSize) + (this.squareSize / 2),
-                    worldZ: TANK_CONSTANTS.DEPTH - 5 // Wall offset
-                };
-            case 'left':
-                return {
-                    worldX: TANK_CONSTANTS.X + 5, // Wall offset
-                    worldY: waterLevelTop + (gridY * this.squareSize) + (this.squareSize / 2),
-                    worldZ: TANK_CONSTANTS.MIN_Z + (gridX * this.squareSize) + (this.squareSize / 2)
-                };
-            case 'right':
-                return {
-                    worldX: TANK_CONSTANTS.X + TANK_CONSTANTS.WIDTH - 5, // Wall offset
-                    worldY: waterLevelTop + (gridY * this.squareSize) + (this.squareSize / 2),
-                    worldZ: TANK_CONSTANTS.MIN_Z + (gridX * this.squareSize) + (this.squareSize / 2)
-                };
-            default:
-                return null;
-        }
+        this.lastHotspotUpdateFrame = this.frameCounter;
+        this.algaeHotspots = [];
+        const regionSize = 40; // Group algae into 40x40 pixel regions
+        const overlap = 20; // Overlap by 20 pixels
+        const stepSize = regionSize - overlap; // Step by 20 pixels to create overlapping regions
+        
+        // Simple approach: generate overlapping regions and count algae in each
+        const hotspots = this.generateOverlappingHotspots(regionSize, stepSize);
+        
+        this.algaeHotspots = hotspots
+            .filter(hotspot => hotspot.strength > 0) // Exclude hotspots with 0 algae
+            .sort((a, b) => b.strength - a.strength)
+            .slice(0, 10); // Limit to top 10 hotspots
     }
 
-    public findBestAlgaeTarget(snailX: number, snailY: number, snailZ: number, maxDistance: number = 600): { x: number, y: number, z: number, wall: 'front' | 'back' | 'left' | 'right' } | null {
-        let bestTarget: { x: number, y: number, z: number, wall: 'front' | 'back' | 'left' | 'right' } | null = null;
-        let bestScore = -1;
+    // Public method to request hotspot update (called by snails)
+    public requestHotspotUpdate(): void {
+        this.updateAlgaeHotspots();
+    }
 
-        for (const hotspot of this.algaeHotspots) {
-            const distance = Math.sqrt(
-                Math.pow(hotspot.centerX - snailX, 2) +
-                Math.pow(hotspot.centerY - snailY, 2) +
-                Math.pow(hotspot.centerZ - snailZ, 2)
-            );
+    public getAlgaeHotspots(): AlgaeHotspot[] {
+        return this.algaeHotspots;
+    }
 
-            if (distance > maxDistance) continue;
+    public worldToGridCoordinatesPublic(wall: 'front' | 'back' | 'left' | 'right', worldX: number, worldY: number, worldZ: number): { gridX: number, gridY: number } | null {
+        return this.worldToGridCoordinates(wall, worldX, worldY, worldZ);
+    }
 
-            // Improved scoring: balance between algae amount and distance
-            // Formula: (algae_strength * algae_count) / (distance^1.5 + 50)
-            // This gives more weight to algae amount while still considering distance
-            // The ^1.5 makes distance less punishing than linear, and +50 prevents division by very small numbers
-            const algaeValue = hotspot.strength * hotspot.count;
-            const distancePenalty = Math.pow(distance + 50, 1.5);
-            const score = algaeValue / distancePenalty;
+    public getWallDimensions(): typeof this.wallDimensions {
+        return this.wallDimensions;
+    }
 
-            if (score > bestScore) {
-                bestScore = score;
-                bestTarget = {
-                    x: hotspot.centerX,
-                    y: hotspot.centerY,
-                    z: hotspot.centerZ,
-                    wall: hotspot.wall
-                };
+    public getWallGrids(): typeof this.wallGrids {
+        return this.wallGrids;
+    }
+
+
+    private generateOverlappingHotspots(regionSize: number, stepSize: number): AlgaeHotspot[] {
+        const hotspots: AlgaeHotspot[] = [];
+        
+        // Convert world space regions to grid space
+        // regionSize of 40 pixels / squareSize of 4 = 10 grid squares
+        // stepSize of 20 pixels / squareSize of 4 = 5 grid squares
+        const gridRegionSize = Math.ceil(regionSize / this.squareSize); // 10 grid squares
+        const gridStepSize = Math.ceil(stepSize / this.squareSize);     // 5 grid squares
+        
+        // Generate overlapping regions for each wall directly in grid coordinates
+        for (const wall of ['front', 'back', 'left', 'right'] as const) {
+            const wallDim = this.wallDimensions[wall];
+            
+            // Iterate through grid coordinates directly
+            for (let gridX = 0; gridX < wallDim.gridCols; gridX += gridStepSize) {
+                for (let gridY = 0; gridY < wallDim.gridRows; gridY += gridStepSize) {
+                    
+                    // Count algae in this grid region
+                    const regionStrength = this.countAlgaeInGridRegion(wall, gridX, gridY, gridRegionSize);
+                    
+                    if (regionStrength > 0) {
+                        // Convert grid center back to world coordinates for the hotspot
+                        const centerGridX = gridX + gridRegionSize / 2;
+                        const centerGridY = gridY + gridRegionSize / 2;
+                        const worldCenter = this.gridToWorldCoordinates(wall, centerGridX, centerGridY);
+                        
+                        if (worldCenter) {
+                            // Map coordinates to snail's goal coordinate system
+                            let goalX: number, goalY: number;
+                            
+                            if (wall === 'left' || wall === 'right') {
+                                // For left/right walls: goal.x = Z-coordinate, goal.y = Y-coordinate
+                                goalX = worldCenter.z;
+                                goalY = worldCenter.y;
+                            } else {
+                                // For front/back walls: goal.x = X-coordinate, goal.y = Y-coordinate
+                                goalX = worldCenter.x;
+                                goalY = worldCenter.y;
+                            }
+                            
+                            hotspots.push({
+                                wall,
+                                centerX: goalX,
+                                centerY: goalY,
+                                centerZ: worldCenter.z,
+                                strength: regionStrength,
+                                count: 0 // We'll calculate this if needed
+                            });
+                        }
+                    }
+                }
             }
         }
-
-        return bestTarget;
+        
+        return hotspots;
     }
 
-    public getHotspotCount(): number {
-        return this.algaeHotspots.length;
-    }
 
     private renderSquare(tank: any, wall: 'front' | 'back' | 'left' | 'right', gridX: number, gridY: number, level: number): void {
         const alpha = level * 0.1
@@ -740,6 +737,58 @@ export class Algae {
                 
                 quad(rightX1, rightY1, rightX2, rightY2, rightX2, rightBottomY2, rightX1, rightBottomY1);
                 break;
+        }
+    }
+
+    private countAlgaeInGridRegion(wall: 'front' | 'back' | 'left' | 'right', startGridX: number, startGridY: number, gridRegionSize: number): number {
+        let totalStrength = 0;
+        const wallDim = this.wallDimensions[wall];
+        
+        // Check all grid cells within the region
+        for (let gridX = startGridX; gridX < Math.min(startGridX + gridRegionSize, wallDim.gridCols); gridX++) {
+            for (let gridY = startGridY; gridY < Math.min(startGridY + gridRegionSize, wallDim.gridRows); gridY++) {
+                if (gridX >= 0 && gridX < wallDim.gridCols && gridY >= 0 && gridY < wallDim.gridRows) {
+                    const level = this.wallGrids[wall][gridX][gridY];
+                    totalStrength += level;
+                }
+            }
+        }
+        
+        return totalStrength;
+    }
+
+    private gridToWorldCoordinates(wall: 'front' | 'back' | 'left' | 'right', gridX: number, gridY: number): { x: number, y: number, z: number } | null {
+        const waterLevelTop = TANK_CONSTANTS.Y + TANK_CONSTANTS.HEIGHT * TANK_CONSTANTS.WATER_LEVEL_PERCENT;
+        
+        // Convert grid coordinates back to world coordinates
+        const worldX = gridX * this.squareSize;
+        const worldY = gridY * this.squareSize + waterLevelTop;
+        
+        switch (wall) {
+            case 'front':
+                return {
+                    x: worldX + TANK_CONSTANTS.X,
+                    y: worldY,
+                    z: TANK_CONSTANTS.MIN_Z + 5
+                };
+            case 'back':
+                return {
+                    x: worldX + TANK_CONSTANTS.X,
+                    y: worldY,
+                    z: TANK_CONSTANTS.DEPTH - 5
+                };
+            case 'left':
+                return {
+                    x: TANK_CONSTANTS.X + 5,
+                    y: worldY,
+                    z: worldX + TANK_CONSTANTS.MIN_Z
+                };
+            case 'right':
+                return {
+                    x: TANK_CONSTANTS.X + TANK_CONSTANTS.WIDTH - 5,
+                    y: worldY,
+                    z: worldX + TANK_CONSTANTS.MIN_Z
+                };
         }
     }
 } 

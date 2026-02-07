@@ -46,12 +46,10 @@ export class EmberTetra extends Fish {
     }
 
     render(tank: Tank, _color?: p5.Color): void {
-        if (!EmberTetra.spritesheet) return;
-    
         // Use the same positioning logic as the Inhabitant class
         const relativeDepth = this.position.z / tank.depth;
         const renderX = lerp(tank.x, tank.backX, relativeDepth) + (this.position.x - tank.x) * lerp(1, 0.7, relativeDepth);
-        const renderY = lerp(tank.y, tank.backY, relativeDepth) + (this.position.y - tank.y) * lerp(1, 0.7, relativeDepth);
+        const renderY = lerp(tank.y, tank.backY, relativeDepth) + (this.position.y - tank.y) * lerp(1, 0.667, relativeDepth);
     
         // Scale size based on depth
         const depthScale = lerp(1, 0.7, relativeDepth);
