@@ -1,33 +1,10 @@
 import { Tank } from './tank.js';
 import { EmberTetra } from './inhabitants/embertetra.js';
-// import { Snail } from './inhabitants/snail.js';
-import { Snail } from './inhabitants/snail_new.js';
+import { Snail } from './inhabitants/snail.js';
 import { SidePane } from './sidepane.js';
 import { getTankBounds } from './constants.js';
 let tank;
 let sidePane;
-// Debug display system
-class DebugDisplay {
-    constructor() {
-        this.debugInfo = new Map();
-    }
-    updateInfo(key, value) {
-        this.debugInfo.set(key, value);
-    }
-    render() {
-        fill(0, 0, 0); // Black text
-        textSize(12);
-        let yOffset = 720; // Start below the tank
-        this.debugInfo.forEach((value, key) => {
-            text(`${key}: ${value}`, 20, yOffset);
-            yOffset += 15;
-        });
-    }
-    clear() {
-        this.debugInfo.clear();
-    }
-}
-const debugDisplay = new DebugDisplay();
 function setup() {
     createCanvas(1200, 800); // Increased width to accommodate side pane
     // Initialize the tank
@@ -66,26 +43,6 @@ function draw() {
     tank.render();
     // Render the side pane
     sidePane.render(tank);
-    // Update debug info
-    updateDebugInfo();
-    // Render debug display
-    debugDisplay.render();
-}
-function updateDebugInfo() {
-    const snails = tank.getSnails();
-    let normalSnails = 0;
-    snails.forEach(snail => {
-        switch (snail.getLifeState()) {
-            case 'normal':
-                normalSnails++;
-                break;
-        }
-    });
-    debugDisplay.updateInfo('Snails', `Total: ${snails.length} | Normal: ${normalSnails}`);
-    if (snails.length > 0) {
-        const firstSnail = snails[0];
-        debugDisplay.updateInfo('First Snail', `Size: ${firstSnail.size} | Hunger: ${Math.round(firstSnail.getHungerValue() * 100)}% | State: ${firstSnail.getLifeState()}`);
-    }
 }
 window.setup = setup;
 window.draw = draw;

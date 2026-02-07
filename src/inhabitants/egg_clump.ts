@@ -2,7 +2,7 @@ import { Inhabitant } from './inhabitant.js';
 import { Position } from '../factors/position.js';
 import { Vector } from '../vector.js';
 import { Tank } from '../tank.js';
-import { Snail } from './snail_new.js';
+import { Snail } from './snail.js';
 import { TANK_CONSTANTS, getTankBounds } from '../constants.js';
 
 // Declare p5.js global functions

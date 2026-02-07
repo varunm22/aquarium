@@ -3,7 +3,7 @@ import { TANK_CONSTANTS } from './constants.js';
 import { Microfauna } from './inhabitants/microfauna.js';
 import { Food } from './inhabitants/food.js';
 import { Algae } from './inhabitants/algae.js';
-import { Snail } from './inhabitants/snail_new.js';
+import { Snail } from './inhabitants/snail.js';
 import { EggClump } from './inhabitants/egg_clump.js';
 import { Position } from './factors/position.js';
 import { Vector } from './vector.js';

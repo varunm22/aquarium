@@ -1,8 +1,7 @@
 import { Tank } from './tank.js';
 import { EmberTetra } from './inhabitants/embertetra.js';
 import { UserFish } from './inhabitants/userfish.js';
-// import { Snail } from './inhabitants/snail.js';
-import { Snail } from './inhabitants/snail_new.js';
+import { Snail } from './inhabitants/snail.js';
 import { SidePane } from './sidepane.js';
 import { getTankBounds } from './constants.js';
 
@@ -17,31 +16,6 @@ declare function textSize(size: number): void;
 let tank: Tank;
 let sidePane: SidePane;
 
-// Debug display system
-class DebugDisplay {
-  private debugInfo: Map<string, string> = new Map();
-  
-  updateInfo(key: string, value: string): void {
-    this.debugInfo.set(key, value);
-  }
-  
-  render(): void {
-    fill(0, 0, 0); // Black text
-    textSize(12);
-    
-    let yOffset = 720; // Start below the tank
-    this.debugInfo.forEach((value, key) => {
-      text(`${key}: ${value}`, 20, yOffset);
-      yOffset += 15;
-    });
-  }
-  
-  clear(): void {
-    this.debugInfo.clear();
-  }
-}
-
-const debugDisplay = new DebugDisplay();
 
 function setup(): void {
   createCanvas(1200, 800); // Increased width to accommodate side pane
@@ -93,30 +67,8 @@ function draw(): void {
   // Render the side pane
   sidePane.render(tank);
   
-  // Update debug info
-  updateDebugInfo();
-  
-  // Render debug display
-  debugDisplay.render();
 }
 
-function updateDebugInfo(): void {
-  const snails = tank.getSnails();
-  let normalSnails = 0;
-  
-  snails.forEach(snail => {
-    switch (snail.getLifeState()) {
-      case 'normal': normalSnails++; break;
-    }
-  });
-  
-  debugDisplay.updateInfo('Snails', `Total: ${snails.length} | Normal: ${normalSnails}`);
-  
-  if (snails.length > 0) {
-    const firstSnail = snails[0];
-    debugDisplay.updateInfo('First Snail', `Size: ${firstSnail.size} | Hunger: ${Math.round(firstSnail.getHungerValue() * 100)}% | State: ${firstSnail.getLifeState()}`);
-  }
-}
 
 // Make setup and draw available to p5.js
 declare global {

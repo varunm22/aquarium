@@ -3,7 +3,7 @@ import { Inhabitant } from './inhabitants/inhabitant.js';
 import { EmberTetra } from './inhabitants/embertetra.js';
 import { UserFish } from './inhabitants/userfish.js';
 import { Fish } from './inhabitants/fish.js';
-import { Snail } from './inhabitants/snail_new.js';
+import { Snail } from './inhabitants/snail.js';
 import { getTankBounds } from './constants.js';
 
 // Declare p5.js global functions
@@ -602,8 +602,7 @@ export class SidePane {
             const feedingStatus = fish.isInFeedingMode() ? ' - feeding' : '';
             text(`Hunger: ${hungerValue}%${feedingStatus}`, infoX, infoY + 9);
         } else if (fish instanceof Snail) {
-            // Size and wall information
-            text(`Size: ${fish.size} | Wall: ${fish.getWall()}`, infoX, infoY - 9);
+            text(`Size: ${fish.size}`, infoX, infoY - 9);
             
             // Hunger and life state information
             const hungerValue = Math.round(fish.getHungerValue() * 100);

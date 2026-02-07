@@ -1,7 +1,7 @@
 import { Inhabitant } from './inhabitant.js';
 import { Position } from '../factors/position.js';
 import { Vector } from '../vector.js';
-import { Snail } from './snail_new.js';
+import { Snail } from './snail.js';
 import { TANK_CONSTANTS } from '../constants.js';
 export class EggClump extends Inhabitant {
     constructor(position, wall) {

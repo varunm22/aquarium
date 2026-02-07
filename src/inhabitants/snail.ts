@@ -4,6 +4,7 @@ import { Vector } from '../vector.js';
 import { Tank } from '../tank.js';
 import { Food } from './food.js';
 import { Hunger } from '../factors/hunger.js';
+import { EggClump } from './egg_clump.js';
 import { TANK_CONSTANTS, getTankBounds } from '../constants.js';
 
 // Declare p5.js global functions
@@ -12,8 +13,6 @@ declare function push(): void;
 declare function pop(): void;
 declare function fill(r: number, g: number, b: number, a?: number): void;
 declare function noStroke(): void;
-declare function stroke(r: number, g: number, b: number, a?: number): void;
-declare function line(x1: number, y1: number, x2: number, y2: number): void;
 declare function ellipse(x: number, y: number, w: number, h: number): void;
 declare function random(): number;
 declare function image(img: p5.Image, x: number, y: number, w: number, h: number, sx: number, sy: number, sw: number, sh: number): void;
@@ -30,9 +29,10 @@ declare namespace p5 {
 
 type Wall = 'front' | 'back' | 'left' | 'right' | 'bottom';
 
-interface PathPoint {
-    position: Vector;
+interface WallPoint {
     wall: Wall;
+    x: number; // 2D coordinate on the wall
+    y: number; // 2D coordinate on the wall
 }
 
 interface SpriteConfig {
@@ -43,7 +43,7 @@ interface SpriteConfig {
 }
 
 // Life cycle states for snails
-type SnailLifeState = 'normal' | 'egg-laying' | 'egg' | 'dying' | 'shell';
+type SnailLifeState = 'normal' | 'egg-laying' | 'dying' | 'shell' | 'dead';
 
 export class Snail extends Inhabitant {
     static spritesheet: p5.Image | null = null;
@@ -58,50 +58,65 @@ export class Snail extends Inhabitant {
     ];
 
     private wall: Wall;
-    private path: PathPoint[] = [];
-    private goal: Vector | null = null;
-    private baseSpeed: number = 0.1 * Math.pow(this.size, 0.5);
+    private path: WallPoint[] = [];
+    private goal: WallPoint | null = null;
     private wallOffset: number = this.size / 2;
-    private velocity: Vector = Vector.zero(); // Current velocity vector
-    private acceleration: Vector = Vector.zero(); // Current acceleration vector
     private coveredAlgaePositions: Set<string> = new Set(); // Track algae positions we've covered
     private tank: Tank | null = null;
+    private bounds: { min: Vector, max: Vector } = getTankBounds();
     private eatingCounter: number = 0; // Counter for eating algae, affects speed
-    private goalReEvaluationChance: number = 0.005; // Very small chance to re-evaluate goal each frame
+    private goalReEvaluationChance: number = 0.003; // Very small chance to re-evaluate goal each frame
+    private maxSize: number = 50;
     private frameCounter: number = 0; // Frame counter for performance optimizations
     private readonly ALGAE_INTERACTION_INTERVAL: number = 5; // Only check algae every 5 frames
+    private lastTransitionFrame: number = 0; // Track when last wall transition occurred
+    private readonly TRANSITION_COOLDOWN: number = 10; // Minimum frames between transitions
+    private lastGoalSetFrame: number = 0; // Track when last goal was set (prevents rapid re-picking)
 
     // Life cycle properties
     private hunger: Hunger;
     private lifeState: SnailLifeState = 'normal';
     private lifeStateCounter: number = 0; // Counter for current life state
-    private opacity: number = 255; // For dying animation
     private canSetGoals: boolean = true; // Whether the snail can set new goals
+    private opacity: number = 255; // For dying animation
     public readonly id: string; // Unique identifier for sorting
     
     // Shell properties
     private shellFalling: boolean = false;
     private shellSettled: boolean = false;
 
-    constructor(size: number = 20) {
-        const startWall = Snail.getRandomWall();
-        const startPos = Snail.getRandomPositionOnWall(startWall, 5);
-        super(new Position(startPos, new Vector(0,0,0), false), size);
+    constructor(size: number = 20, initialPosition?: Vector, initialWall?: Wall, initialHunger?: number) {
+        let startWall: Wall;
+        let startPos: Vector;
+        
+        if (initialPosition && initialWall) {
+            // Use provided position and wall (for baby snails)
+            startWall = initialWall;
+            startPos = initialPosition;
+        } else {
+            // Random initialization (for new snails) - will be set after super()
+            startWall = 'back'; // temporary default
+            startPos = new Vector(0, 0, 0); // temporary default
+        }
+        
+        super(new Position(startPos, new Vector(0,0,0), false, 0.80), size);
 
+        // Now we can use instance methods for random initialization
+        if (!initialPosition || !initialWall) {
+            startWall = this.getRandomWall();
+            startPos = this.getRandomPositionOnWall(startWall, 5);
+            this.position.value = startPos;
+        }
+        
         this.wall = startWall;
         
-        // Initialize hunger factor (starts at 20%) with slower increase rate for snails
-        this.hunger = new Hunger(0.2, 0, 0.0001); // 3x slower than default
+        // Initialize hunger factor with custom value for baby snails or default 20% for new snails
+        const hungerValue = initialHunger !== undefined ? initialHunger : 0.2;
+        this.hunger = new Hunger(hungerValue, 0, 0.0001); // 3x slower than default
         
         // Generate unique ID for this snail
         this.id = Math.random().toString(36).substring(2, 8);
         
-        // If this is a newly hatched snail (size 2), start in egg phase
-        if (size === 2) {
-            this.lifeState = 'egg';
-            this.lifeStateCounter = 400; // 400 frames until hatching
-            this.canSetGoals = false;
-        }
         
         this.setNewGoal();
     }
@@ -110,336 +125,174 @@ export class Snail extends Inhabitant {
         Snail.spritesheet = loadImage('assets/snail_clear.png');
     }
 
-    private static getRandomWall(): Wall {
+    private getRandomWall(): Wall {
         const walls: Wall[] = ['front', 'back', 'left', 'right', 'bottom'];
         return walls[Math.floor(random() * walls.length)];
     }
 
-    private static getTankBounds() {
-        return {
-            minX: TANK_CONSTANTS.X,
-            maxX: TANK_CONSTANTS.X + TANK_CONSTANTS.WIDTH,
-            minY: TANK_CONSTANTS.Y + TANK_CONSTANTS.HEIGHT * TANK_CONSTANTS.WATER_LEVEL_PERCENT,
-            maxY: TANK_CONSTANTS.Y + TANK_CONSTANTS.HEIGHT - TANK_CONSTANTS.GRAVEL_HEIGHT,
-            minZ: TANK_CONSTANTS.MIN_Z,
-            maxZ: TANK_CONSTANTS.DEPTH
-        };
-    }
-
-    private static getRandomPositionOnWall(wall: Wall, offset: number): Vector {
-        const bounds = Snail.getTankBounds();
+    private getRandomPositionOnWall(wall: Wall, offset: number, size: number = 20): Vector {
+        const bounds = this.bounds;
 
         switch (wall) {
             case 'front':
                 return new Vector(
-                    bounds.minX + random() * TANK_CONSTANTS.WIDTH,
-                    bounds.minY + random() * (bounds.maxY - bounds.minY),
-                    bounds.minZ + offset
+                    bounds.min.x + random() * TANK_CONSTANTS.WIDTH,
+                    bounds.min.y + random() * (bounds.max.y - bounds.min.y),
+                    bounds.min.z + offset
                 );
             case 'back':
                 return new Vector(
-                    bounds.minX + random() * TANK_CONSTANTS.WIDTH,
-                    bounds.minY + random() * (bounds.maxY - bounds.minY),
-                    bounds.maxZ - offset
+                    bounds.min.x + random() * TANK_CONSTANTS.WIDTH,
+                    bounds.min.y + random() * (bounds.max.y - bounds.min.y),
+                    bounds.max.z - offset
                 );
             case 'left':
                 return new Vector(
-                    bounds.minX + offset,
-                    bounds.minY + random() * (bounds.maxY - bounds.minY),
-                    bounds.minZ + random() * (bounds.maxZ - bounds.minZ)
+                    bounds.min.x + offset,
+                    bounds.min.y + random() * (bounds.max.y - bounds.min.y),
+                    bounds.min.z + random() * (bounds.max.z - bounds.min.z)
                 );
             case 'right':
                 return new Vector(
-                    bounds.maxX - offset,
-                    bounds.minY + random() * (bounds.maxY - bounds.minY),
-                    bounds.minZ + random() * (bounds.maxZ - bounds.minZ)
+                    bounds.max.x - offset,
+                    bounds.min.y + random() * (bounds.max.y - bounds.min.y),
+                    bounds.min.z + random() * (bounds.max.z - bounds.min.z)
                 );
             case 'bottom':
                 return new Vector(
-                    bounds.minX + random() * TANK_CONSTANTS.WIDTH,
-                    bounds.maxY - offset,
-                    bounds.minZ + random() * (bounds.maxZ - bounds.minZ)
+                    bounds.min.x + random() * TANK_CONSTANTS.WIDTH,
+                    bounds.max.y - offset,
+                    bounds.min.z + random() * (bounds.max.z - bounds.min.z)
                 );
         }
     }
+
+    // Convert 3D world position to 2D wall coordinates
+    private world3DToWall(pos: Vector, wall: Wall): WallPoint {
+        switch (wall) {
+            case 'front':
+            case 'back':
+                return { wall, x: pos.x, y: pos.y };
+            case 'left':
+            case 'right':
+                return { wall, x: pos.z, y: pos.y };
+            case 'bottom':
+                return { wall, x: pos.x, y: pos.z };
+        }
+    }
+
+    // Convert 2D wall coordinates to 3D world position
+    private wall2DToWorld3D(wallPoint: WallPoint): Vector {
+        const bounds = this.bounds;
+        
+        switch (wallPoint.wall) {
+            case 'front':
+                return new Vector(wallPoint.x, wallPoint.y, bounds.min.z + this.wallOffset);
+            case 'back':
+                return new Vector(wallPoint.x, wallPoint.y, bounds.max.z - this.wallOffset);
+            case 'left':
+                return new Vector(bounds.min.x + this.wallOffset, wallPoint.y, wallPoint.x);
+            case 'right':
+                return new Vector(bounds.max.x - this.wallOffset, wallPoint.y, wallPoint.x);
+            case 'bottom':
+                return new Vector(wallPoint.x, bounds.max.y - this.wallOffset, wallPoint.y);
+        }
+    }
+
+    private wall2DToWorld3DVelocity(wallPoint: WallPoint): Vector {
+        switch (wallPoint.wall) {
+            case 'front':
+                return new Vector(wallPoint.x, wallPoint.y, 0);
+            case 'back':
+                return new Vector(wallPoint.x, wallPoint.y, 0);
+            case 'left':
+                return new Vector(0, wallPoint.y, wallPoint.x);
+            case 'right':
+                return new Vector(0, wallPoint.y, wallPoint.x);
+            case 'bottom':
+                return new Vector(wallPoint.x, 0, wallPoint.y);
+        }
+
+    }
+
+    // Calculate distance between two positions, using 2D distance if on same wall, 3D distance otherwise
+    private wallDistance(pos1: Vector, wall1: Wall, pos2: Vector, wall2: Wall): number {
+        if (wall1 === wall2) {
+            // Same wall: use 2D distance ignoring wall offset
+            const pos1_2D = this.world3DToWall(pos1, wall1);
+            const pos2_2D = this.world3DToWall(pos2, wall2);
+            const dx = pos1_2D.x - pos2_2D.x;
+            const dy = pos1_2D.y - pos2_2D.y;
+            return Math.sqrt(dx * dx + dy * dy);
+        } else {
+            // Different walls: use 3D distance
+            return pos1.distanceTo(pos2);
+        }
+    }
+
 
     private setNewGoal(): void {
-        if (!this.tank) {
-            // Fallback to random goal if no tank access
-            const goalWall = Snail.getRandomWall();
-            this.goal = Snail.getRandomPositionOnWall(goalWall, this.wallOffset);
+        this.lastGoalSetFrame = this.frameCounter;
+
+        // TOP PRIORITY: Check for settled food at the bottom
+        const settledFood = this.findNearestSettledFood();
+        if (settledFood) {
+            // Found settled food, set goal to food position
+            const foodPos = settledFood.position.value;
+            const food2D = this.world3DToWall(foodPos, 'bottom');
+            this.goal = { wall: 'bottom', x: food2D.x, y: food2D.y };
         } else {
-            // TOP PRIORITY: Check for settled food at the bottom
-            const settledFood = this.findNearestSettledFood();
-            if (settledFood) {
-                // Found settled food, set goal to food position
-                this.goal = new Vector(settledFood.position.x, settledFood.position.y, settledFood.position.z);
-            } else {
-                // Use hierarchical algae finding
-                this.goal = this.findHierarchicalAlgaeGoal();
-            }
+             // SECOND PRIORITY: Use best algae hotspot
+             const bestAlgaeTarget = this.findBestAlgaeTarget();
+             if (bestAlgaeTarget) {
+                 // Check if we're close to the best target (within 40 units)
+                 const bestTargetPos = this.wall2DToWorld3D(bestAlgaeTarget);
+                 const distanceToBestTarget = this.wallDistance(this.position.value, this.wall, bestTargetPos, bestAlgaeTarget.wall);
+                 
+                 if (distanceToBestTarget <= 40) {
+                     // We're close to goal, find precise 8x8 square within hotspot region
+                     const preciseGoal = this.findPreciseAlgaeGoal(bestAlgaeTarget);
+                     this.goal = preciseGoal;
+                 } else {
+                    this.goal = bestAlgaeTarget;
+                 }
+             } else {
+                 // FALLBACK: Random goal
+                 this.setRandomGoal();
+                 return;
+             }
         }
 
-        // Check if the new goal is too close to the old goal (within 1 unit)
-        if (this.goal && this.path.length > 0) {
-            const lastPathPoint = this.path[this.path.length - 1];
-            const distanceToOldGoal = this.goal.distanceTo(lastPathPoint.position);
-            if (distanceToOldGoal <= 1) {
-                this.goal = Snail.getRandomPositionOnWall(this.wall, this.wallOffset);
-                // New goal is too close to old goal, don't regenerate path
-                return;
-            }
-        }
-
-        console.log('goal', this.goal, this.size);
-        this.path = this.generatePath(this.position.value, this.goal!);
-    }
-
-    private hotspotToVector(hotspot: any): Vector {
-        const bounds = Snail.getTankBounds();
-        
-        switch (hotspot.wall) {
-            case 'front':
-                return new Vector(
-                    hotspot.centerX,
-                    hotspot.centerY,
-                    bounds.minZ + this.wallOffset
-                );
-            case 'back':
-                return new Vector(
-                    hotspot.centerX,
-                    hotspot.centerY,
-                    bounds.maxZ - this.wallOffset
-                );
-            case 'left':
-                return new Vector(
-                    bounds.minX + this.wallOffset,
-                    hotspot.centerY,
-                    hotspot.centerX
-                );
-            case 'right':
-                return new Vector(
-                    bounds.maxX - this.wallOffset,
-                    hotspot.centerY,
-                    hotspot.centerX
-                );
-            default:
-                return new Vector(0, 0, 0);
+        if (this.goal) {
+            this.goal = this.clampGoalToWallBounds(this.goal);
+            this.path = this.generatePath(this.goal);
         }
     }
 
-    private findHierarchicalAlgaeGoal(): Vector {
-        const pos = this.position.value;
-        
-        // Use the algae hotspot system
-        if (this.tank && this.tank.algae) {
-            // Request hotspot update (will only update if not updated in last 50 frames)
-            this.tank.algae.requestHotspotUpdate();
-            
-            const hotspots = this.tank.algae.getAlgaeHotspots();
-            if (hotspots.length > 0) {
-                // Find the best hotspot based on distance and strength
-                let bestHotspot = hotspots[0];
-                let bestScore = -1;
-                const maxDistance = 1200;
-                
-                for (const hotspot of hotspots) {
-                    // Convert hotspot to 3D position for distance calculation
-                    const hotspotPos = this.hotspotToVector(hotspot);
-                    
-                    const distance = pos.distanceTo(hotspotPos);
-                    if (distance > maxDistance) continue;
-                    
-                    // Calculate score: strength adjusted by distance
-                    const effectiveDistance = Math.max(distance, 50);
-                    const score = hotspot.strength / (effectiveDistance + 50);
-                    
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestHotspot = hotspot;
-                    }
-                }
-                
-                // Convert best hotspot to 3D position
-                const bestTarget = this.hotspotToVector(bestHotspot);
-                
-                console.log(`🎯 Found algae hotspot: pos(${bestTarget.x.toFixed(1)}, ${bestTarget.y.toFixed(1)}, ${bestTarget.z.toFixed(1)}) on ${bestHotspot.wall} wall`);
-                console.log("PATH", this.path)
-                return bestTarget;
-            }
-        }
-        
-        // No algae found, set random goal
-        console.log(`❌ No algae targets found - using random goal`);
-        const goalWall = Snail.getRandomWall();
-        return Snail.getRandomPositionOnWall(goalWall, this.wallOffset);
-    }
-
-    private findBestAlgaeSquare(center: Vector, squareSize: number): { center: Vector, strength: number, secondBest: { center: Vector, strength: number } | null } | null {
-        if (!this.tank || this.wall === 'bottom') return null;
-        
-        const searchRadius = squareSize * 2; // Look in a larger area to find the best square
-        const gridSize = 4; // Algae square size
-        const squareMap = new Map<string, { center: Vector, strength: number }>();
-        
-        // Get wall bounds
-        const wallBounds = this.getWallBounds();
-        const minX = Math.max(wallBounds.minX, center.x - searchRadius);
-        const maxX = Math.min(wallBounds.maxX, center.x + searchRadius);
-        const minY = Math.max(wallBounds.minY, center.y - searchRadius);
-        const maxY = Math.min(wallBounds.maxY, center.y + searchRadius);
-        
-        // Step by grid size to check each potential square center
-        for (let x = Math.floor(minX / squareSize) * squareSize + squareSize/2; x <= maxX; x += squareSize) {
-            for (let y = Math.floor(minY / squareSize) * squareSize + squareSize/2; y <= maxY; y += squareSize) {
-                // Calculate z based on current wall
-                let z = center.z;
-                switch (this.wall) {
-                    case 'front':
-                        z = wallBounds.minZ + this.wallOffset;
-                        break;
-                    case 'back':
-                        z = wallBounds.maxZ - this.wallOffset;
-                        break;
-                    case 'left':
-                    case 'right':
-                        z = center.z;
-                        break;
-                }
-                
-                const squareCenter = new Vector(x, y, z);
-                const squareStrength = this.calculateSquareAlgaeStrength(squareCenter, squareSize);
-                
-                if (squareStrength > 0) {
-                    const key = `${Math.floor(x/squareSize)}-${Math.floor(y/squareSize)}`;
-                    squareMap.set(key, { center: squareCenter, strength: squareStrength });
-                }
-            }
-        }
-        
-        // Find the strongest and second strongest squares
-        let bestSquare: { center: Vector, strength: number } | null = null;
-        let secondBestSquare: { center: Vector, strength: number } | null = null;
-        let bestStrength = 0;
-        let secondBestStrength = 0;
-        
-        for (const square of squareMap.values()) {
-            if (square.strength > bestStrength) {
-                // Current best becomes second best
-                secondBestSquare = bestSquare;
-                secondBestStrength = bestStrength;
-                // New best
-                bestStrength = square.strength;
-                bestSquare = square;
-            } else if (square.strength > secondBestStrength) {
-                // New second best
-                secondBestSquare = square;
-                secondBestStrength = square.strength;
-            }
-        }
-        
-        if (bestSquare) {
-            return { 
-                center: bestSquare.center, 
-                strength: bestSquare.strength, 
-                secondBest: secondBestSquare 
-            };
-        }
-        
-        return null;
-    }
-
-    private calculateSquareAlgaeStrength(center: Vector, squareSize: number): number {
-        if (!this.tank) return 0;
-        
-        const halfSize = squareSize / 2;
-        let totalStrength = 0;
-        const gridSize = 4;
-        
-        // Check each grid position within the square
-        for (let x = center.x - halfSize; x <= center.x + halfSize; x += gridSize) {
-            for (let y = center.y - halfSize; y <= center.y + halfSize; y += gridSize) {
-                const checkPos = new Vector(x, y, center.z);
-                // Only check algae on walls that support it (not bottom)
-                if (this.wall !== 'bottom') {
-                    const algaeLevel = this.tank.algae.getAlgaeLevel(this.wall as 'front' | 'back' | 'left' | 'right', checkPos.x, checkPos.y, checkPos.z);
-                    totalStrength += algaeLevel;
-                }
-            }
-        }
-        
-        return totalStrength;
-    }
-
-    private isInSquare(pos: Vector, squareCenter: Vector, squareSize: number): boolean {
-        const halfSize = squareSize / 2;
-        return Math.abs(pos.x - squareCenter.x) <= halfSize && 
-               Math.abs(pos.y - squareCenter.y) <= halfSize;
-    }
-
-    private findBestSingleAlgae(center: Vector, searchRadius: number): Vector | null {
-        if (!this.tank) return null;
-        
-        const gridSize = 4;
-        let bestAlgae: Vector | null = null;
-        let bestStrength = 0;
-        
-        // Check each grid position within the search radius
-        for (let x = center.x - searchRadius; x <= center.x + searchRadius; x += gridSize) {
-            for (let y = center.y - searchRadius; y <= center.y + searchRadius; y += gridSize) {
-                const checkPos = new Vector(x, y, center.z);
-                const distance = center.distanceTo(checkPos);
-                
-                if (distance <= searchRadius) {
-                    // Only check algae on walls that support it (not bottom)
-                    if (this.wall !== 'bottom') {
-                        const algaeLevel = this.tank.algae.getAlgaeLevel(this.wall as 'front' | 'back' | 'left' | 'right', checkPos.x, checkPos.y, checkPos.z);
-                        if (algaeLevel > bestStrength) {
-                            bestStrength = algaeLevel;
-                            bestAlgae = checkPos.copy();
-                        }
-                    }
-                }
-            }
-        }
-        
-        return bestAlgae;
-    }
-
-    private clampPositionToWallPosition(pos: Vector): Vector {
-        const bounds = Snail.getTankBounds();
-        const clampedPos = pos.copy();
-
-        // Clamp to tank bounds first
-        clampedPos.x = Math.max(bounds.minX, Math.min(bounds.maxX, clampedPos.x));
-        clampedPos.y = Math.max(bounds.minY, Math.min(bounds.maxY, clampedPos.y));
-        clampedPos.z = Math.max(bounds.minZ, Math.min(bounds.maxZ, clampedPos.z));
-
-        // Then clamp to current wall
-        switch (this.wall) {
-            case 'front':
-                clampedPos.z = bounds.minZ + this.wallOffset;
+    /** Clamp a goal's 2D coordinates to the reachable bounds of its wall */
+    private clampGoalToWallBounds(goal: WallPoint): WallPoint {
+        const bounds = this.bounds;
+        let minX: number, maxX: number, minY: number, maxY: number;
+        switch (goal.wall) {
+            case 'front': case 'back':
+                minX = bounds.min.x; maxX = bounds.max.x;
+                minY = bounds.min.y; maxY = bounds.max.y;
                 break;
-            case 'back':
-                clampedPos.z = bounds.maxZ - this.wallOffset;
-                break;
-            case 'left':
-                clampedPos.x = bounds.minX + this.wallOffset;
-                break;
-            case 'right':
-                clampedPos.x = bounds.maxX - this.wallOffset;
+            case 'left': case 'right':
+                minX = bounds.min.z; maxX = bounds.max.z;
+                minY = bounds.min.y; maxY = bounds.max.y;
                 break;
             case 'bottom':
-                clampedPos.y = bounds.maxY - this.wallOffset;
+                minX = bounds.min.x; maxX = bounds.max.x;
+                minY = bounds.min.z; maxY = bounds.max.z;
                 break;
         }
-
-        return clampedPos;
+        return {
+            wall: goal.wall,
+            x: Math.max(minX, Math.min(maxX, goal.x)),
+            y: Math.max(minY, Math.min(maxY, goal.y))
+        };
     }
-
-
-
-
 
     private findNearestSettledFood(): Food | null {
         if (!this.tank) return null;
@@ -452,7 +305,7 @@ export class Snail extends Inhabitant {
         for (const food of this.tank.food) {
             // Only consider settled food
             if (food.settled) {
-                const distance = pos.distanceTo(food.position.value);
+                const distance = this.wallDistance(pos, this.wall, food.position.value, 'bottom');
                 if (distance < nearestDistance) {
                     nearestDistance = distance;
                     nearestFood = food;
@@ -463,134 +316,148 @@ export class Snail extends Inhabitant {
         return nearestFood;
     }
 
+    private findBestAlgaeTarget(): WallPoint | null {
+        if (!this.tank || !this.tank.algae) return null;
+        
+        // Request hotspot update (will only update if not updated in last 50 frames)
+        this.tank.algae.requestHotspotUpdate();
+        
+        const pos = this.position.value;
+        let bestTarget: WallPoint | null = null;
+        let bestScore = -1;
+        const maxDistance = 600; // Maximum distance to consider
 
+        // Check all algae hotspots
+        for (const hotspot of this.tank.algae.getAlgaeHotspots()) {
+            // Convert hotspot to 3D position for distance calculation
+            const hotspotPos = this.wall2DToWorld3D({ wall: hotspot.wall, x: hotspot.centerX, y: hotspot.centerY });
+            
+            const distance = this.wallDistance(pos, this.wall, hotspotPos, hotspot.wall);
+            
+            if (distance > maxDistance) continue;
 
-    private getWallBounds(): { minX: number, maxX: number, minY: number, maxY: number, minZ: number, maxZ: number } {
-        const bounds = Snail.getTankBounds();
-        return bounds;
+            // Calculate score: strength adjusted by distance
+            const score = hotspot.strength / (distance + 50);
+            if (score > bestScore) {
+                bestScore = score;
+                bestTarget = {
+                    wall: hotspot.wall,
+                    x: hotspot.centerX,
+                    y: hotspot.centerY
+                };
+            }
+        }
+
+        return bestTarget;
     }
 
-    private generatePath(startPos: Vector, endPos: Vector): PathPoint[] {
-        const startWall = this.getWallFromPosition(startPos);
-        const endWall = this.getWallFromPosition(endPos);
 
-        if (startWall === endWall) {
-            return [{ position: endPos, wall: endWall }];
+    private findPreciseAlgaeGoal(hotspotGoal: WallPoint): WallPoint | null {
+        if (!this.tank || !this.tank.algae) {
+            return null;
         }
+        
+        // Only work with walls that have algae (exclude bottom wall)
+        if (hotspotGoal.wall === 'bottom') {
+            return null; // No algae on bottom wall
+        }
+        
+        
+        // Use the original hotspot region (40x40)
+        const regionSize = 40;
+        
+        // Calculate region bounds - need to handle coordinate mapping for left/right walls
+        let regionCenterX: number, regionCenterY: number;
+        let regionMinX: number, regionMaxX: number, regionMinY: number, regionMaxY: number;
+        
+        if (hotspotGoal.wall === 'left' || hotspotGoal.wall === 'right') {
+            // For left/right walls: hotspotGoal.x is Z-coordinate, hotspotGoal.y is Y-coordinate
+            regionCenterX = hotspotGoal.x; // This is actually Z
+            regionCenterY = hotspotGoal.y; // This is actually Y
+        } else {
+            // For front/back walls: hotspotGoal.x is X-coordinate, hotspotGoal.y is Y-coordinate
+            regionCenterX = hotspotGoal.x;
+            regionCenterY = hotspotGoal.y;
+        }
+        
+        regionMinX = regionCenterX - (regionSize / 2);
+        regionMaxX = regionCenterX + (regionSize / 2);
+        regionMinY = regionCenterY - (regionSize / 2);
+        regionMaxY = regionCenterY + (regionSize / 2);
+        
+        // Split into 8x8 pixel squares and find the best one
+        const squareSize = 8;
+        let bestSquare: { x: number, y: number, strength: number } | null = null;
+        let bestStrength = 0;
+        let totalSquaresChecked = 0;
+        let squaresWithAlgae = 0;
+        
+        // Iterate through 8x8 squares within the expanded region
+        for (let squareX = regionMinX; squareX < regionMaxX; squareX += squareSize) {
+            for (let squareY = regionMinY; squareY < regionMaxY; squareY += squareSize) {
+                totalSquaresChecked++;
+                
+                // Calculate algae strength in this 8x8 square
+                const squareStrength = this.calculateSquareAlgaeStrength(
+                    hotspotGoal.wall as 'front' | 'back' | 'left' | 'right',
+                    squareX,
+                    squareY,
+                    squareSize
+                );
+                
+                if (squareStrength > 0) {
+                    squaresWithAlgae++;
+                }
+                
+                if (squareStrength > bestStrength) {
+                    bestStrength = squareStrength;
+                    bestSquare = {
+                        x: squareX + (squareSize / 2), // Center of square
+                        y: squareY + (squareSize / 2), // Center of square
+                        strength: squareStrength
+                    };
+                }
+            }
+        }
+        
+        
+        // Return the best square as a goal, or fallback to original hotspot
+        if (bestSquare && bestSquare.strength > 0) {
+            return {
+                wall: hotspotGoal.wall,
+                x: bestSquare.x,
+                y: bestSquare.y
+            };
+        }
+        
+        return null; // No good square found, will fallback to original hotspot
+    }
 
-        const adjacentWalls = this.getAdjacentWalls(startWall);
-        if (adjacentWalls.includes(endWall)) {
-            const edgePoint = this.getEdgeIntersection(startPos, endPos, startWall, endWall);
-            // should this be startWall or endWall for the first position??
-            return [
-                { position: edgePoint, wall: startWall },
-                { position: endPos, wall: endWall }
-            ];
-        }
+    private calculateSquareAlgaeStrength(wall: 'front' | 'back' | 'left' | 'right', squareX: number, squareY: number, squareSize: number): number {
+        if (!this.tank || !this.tank.algae) return 0;
+        
+        // Sample the center point of the square for simplicity
+        const centerX = squareX + (squareSize / 2);
+        const centerY = squareY + (squareSize / 2);
+        
+        return this.tank.algae.getAlgaeLevel(wall, centerX, centerY);
+    }
+
+    private generatePath(goal: WallPoint): WallPoint[] {
+        const startPos2D = this.world3DToWall(this.position.value, this.wall);
+        const startWall = this.wall;
+        const targetWall = goal.wall;
 
         const oppositeWall = this.getOppositeWall(startWall);
-        if (endWall === oppositeWall) {
-            const possiblePaths: PathPoint[][] = [];
-
-            for (const intermediateWall of adjacentWalls) {
-                if (intermediateWall !== 'bottom') {
-                    // Path through a side wall
-                    const point1 = this.getEdgeIntersection(startPos, endPos, startWall, intermediateWall);
-                    const point2 = this.getEdgeIntersection(point1, endPos, intermediateWall, endWall);
-                    possiblePaths.push([
-                        { position: point1, wall: intermediateWall },
-                        { position: point2, wall: endWall },
-                        { position: endPos, wall: endWall }
-                    ]);
-                } else if (startWall !== 'bottom' && endWall !== 'bottom') {
-                    // Path through the bottom
-                    const point1 = this.getEdgeIntersection(startPos, endPos, startWall, 'bottom');
-                    const point2 = this.getEdgeIntersection(point1, endPos, 'bottom', endWall);
-                    possiblePaths.push([
-                        { position: point1, wall: 'bottom' },
-                        { position: point2, wall: endWall },
-                        { position: endPos, wall: endWall }
-                    ]);
-                }
-            }
-
-            let shortestPath: PathPoint[] = [];
-            let shortestDistance = Infinity;
-
-            for (const path of possiblePaths) {
-                const distance = this.getPathLength(startPos, path.map(p => p.position));
-                if (distance < shortestDistance) {
-                    shortestDistance = distance;
-                    shortestPath = path;
-                }
-            }
-            return shortestPath;
-        }
-        
-        return [{ position: endPos, wall: endWall }]; // Fallback
-    }
-
-    private getPathLength(startPos: Vector, path: Vector[]): number {
-        let totalDistance = 0;
-        let lastPos = startPos;
-        for (const point of path) {
-            totalDistance += lastPos.distanceTo(point);
-            lastPos = point;
-        }
-        return totalDistance;
-    }
-
-    private getEdgeIntersection(startPos: Vector, endPos: Vector, startWall: Wall, endWall: Wall): Vector {
-        const bounds = Snail.getTankBounds();
-        
-        // Calculate the intersection point on the shared edge between two walls
-        switch (`${startWall}-${endWall}`) {
-            // Front wall transitions
-            case 'front-left':
-                return new Vector(bounds.minX + this.wallOffset, startPos.y, bounds.minZ + this.wallOffset);
-            case 'front-right':
-                return new Vector(bounds.maxX - this.wallOffset, startPos.y, bounds.minZ + this.wallOffset);
-            case 'front-bottom':
-                return new Vector(startPos.x, bounds.maxY - this.wallOffset, bounds.minZ + this.wallOffset);
-            
-            // Back wall transitions
-            case 'back-left':
-                return new Vector(bounds.minX + this.wallOffset, startPos.y, bounds.maxZ - this.wallOffset);
-            case 'back-right':
-                return new Vector(bounds.maxX - this.wallOffset, startPos.y, bounds.maxZ - this.wallOffset);
-            case 'back-bottom':
-                return new Vector(startPos.x, bounds.maxY - this.wallOffset, bounds.maxZ - this.wallOffset);
-            
-            // Left wall transitions
-            case 'left-front':
-                return new Vector(bounds.minX + this.wallOffset, startPos.y, bounds.minZ + this.wallOffset);
-            case 'left-back':
-                return new Vector(bounds.minX + this.wallOffset, startPos.y, bounds.maxZ - this.wallOffset);
-            case 'left-bottom':
-                return new Vector(bounds.minX + this.wallOffset, bounds.maxY - this.wallOffset, startPos.z);
-            
-            // Right wall transitions
-            case 'right-front':
-                return new Vector(bounds.maxX - this.wallOffset, startPos.y, bounds.minZ + this.wallOffset);
-            case 'right-back':
-                return new Vector(bounds.maxX - this.wallOffset, startPos.y, bounds.maxZ - this.wallOffset);
-            case 'right-bottom':
-                return new Vector(bounds.maxX - this.wallOffset, bounds.maxY - this.wallOffset, startPos.z);
-            
-            // Bottom wall transitions
-            case 'bottom-front':
-                return new Vector(startPos.x, bounds.maxY - this.wallOffset, bounds.minZ + this.wallOffset);
-            case 'bottom-back':
-                return new Vector(startPos.x, bounds.maxY - this.wallOffset, bounds.maxZ - this.wallOffset);
-            case 'bottom-left':
-                return new Vector(bounds.minX + this.wallOffset, bounds.maxY - this.wallOffset, startPos.z);
-            case 'bottom-right':
-                return new Vector(bounds.maxX - this.wallOffset, bounds.maxY - this.wallOffset, startPos.z);
-            
-            default:
-                return startPos.copy(); // Fallback
+        if (targetWall !== oppositeWall) {
+            // Same or adjacent wall - direct 1-point path
+            return [this.clampGoalToWallBounds({ wall: targetWall, x: goal.x, y: goal.y })];
+        } else {
+            // Opposite walls - 2-point path through an intervening wall
+            return this.generatePathThroughInterveningWall(startWall, targetWall, startPos2D, goal);
         }
     }
+
 
     private getOppositeWall(wall: Wall): Wall | null {
         switch (wall) {
@@ -602,7 +469,112 @@ export class Snail extends Inhabitant {
         }
     }
 
+    private generatePathThroughInterveningWall(startWall: Wall, targetWall: Wall, startPos2D: { x: number, y: number }, goal: WallPoint): WallPoint[] {
+        const adjacentWalls = this.getAdjacentWalls(startWall);
+        let bestWall: Wall = adjacentWalls[0];
+        let shortestDistance = Infinity;
+        let bestMidpoint: { x: number, y: number } = { x: 0, y: 0 };
+
+        // Find best intervening wall and calculate its midpoint in one pass
+        for (const interveningWall of adjacentWalls) {
+            // Calculate distance using simplified algorithm
+            const result = this.calculateSimplePathDistance(startWall, interveningWall, targetWall, startPos2D, goal);
+            
+            if (result.distance < shortestDistance) {
+                shortestDistance = result.distance;
+                bestWall = interveningWall;
+                bestMidpoint = result.wallPosition;
+            }
+        }
+        
+        // Return the complete path (clamped to wall bounds)
+        return [
+            this.clampGoalToWallBounds({ wall: bestWall, x: bestMidpoint.x, y: bestMidpoint.y }),
+            this.clampGoalToWallBounds({ wall: targetWall, x: goal.x, y: goal.y })
+        ];
+    }
+
+    private calculateSimplePathDistance(startWall: Wall, interveningWall: Wall, targetWall: Wall, startPos2D: { x: number, y: number }, goal: WallPoint): { distance: number, wallPosition: { x: number, y: number } } {
+        const bounds = this.bounds;
+        
+        // Calculate the three distances for this intervening wall
+        let distToInterveningWall: number;
+        let distFromGoalToInterveningWall: number;
+        let otherDimensionDiff: number;
+
+        switch (interveningWall) {
+            case 'left':
+                distToInterveningWall = startPos2D.x - bounds.min.x;
+                distFromGoalToInterveningWall = goal.x - bounds.min.x;
+                otherDimensionDiff = Math.abs(goal.y - startPos2D.y);
+                break;
+            case 'right':
+                distToInterveningWall = bounds.max.x - startPos2D.x;
+                distFromGoalToInterveningWall = bounds.max.x - goal.x;
+                otherDimensionDiff = Math.abs(goal.y - startPos2D.y);
+                break;
+            case 'front':
+                distToInterveningWall = startPos2D.x - bounds.min.z;
+                distFromGoalToInterveningWall = goal.x - bounds.min.z;
+                otherDimensionDiff = Math.abs(goal.y - startPos2D.y);
+                break;
+            case 'back':
+                distToInterveningWall = bounds.max.z - startPos2D.x;
+                distFromGoalToInterveningWall = bounds.max.z - goal.x;
+                otherDimensionDiff = Math.abs(goal.y - startPos2D.y);
+                break;
+            case 'bottom':
+                distToInterveningWall = bounds.max.y - startPos2D.y;
+                distFromGoalToInterveningWall = bounds.max.y - goal.y;
+                otherDimensionDiff = Math.abs(goal.x - startPos2D.x);
+                break;
+        }
+        const longerDist = Math.max(distToInterveningWall, distFromGoalToInterveningWall);
+        const shorterDist = Math.min(distToInterveningWall, distFromGoalToInterveningWall);
+        const pathDistance = Math.sqrt(longerDist ** 2 + otherDimensionDiff ** 2) + shorterDist;
+
+        // Compute midpoint in the INTERVENING wall's 2D coordinate space.
+        // Wall 2D mappings: front/back=(worldX,worldY), left/right=(worldZ,worldY), bottom=(worldX,worldZ)
+        const startIsCloser = distToInterveningWall < distFromGoalToInterveningWall;
+        let midX: number = 0;
+        let midY: number = 0;
+
+        switch (interveningWall) {
+            case 'left':
+            case 'right':
+                // 2D: x=worldZ, y=worldY. Snail crosses in the worldZ direction.
+                midX = (bounds.min.z + bounds.max.z) / 2;
+                midY = startIsCloser ? startPos2D.y : goal.y; // shared worldY
+                break;
+            case 'front':
+            case 'back':
+                // 2D: x=worldX, y=worldY. Snail crosses in the worldX direction.
+                midX = (bounds.min.x + bounds.max.x) / 2;
+                midY = startIsCloser ? startPos2D.y : goal.y; // shared worldY
+                break;
+            case 'bottom':
+                // 2D: x=worldX, y=worldZ. Coordinate mapping differs from side walls.
+                if (startWall === 'front' || startWall === 'back') {
+                    // Front/back share worldX with bottom. Snail crosses in worldZ direction.
+                    midX = startIsCloser ? startPos2D.x : goal.x; // shared worldX
+                    midY = (bounds.min.z + bounds.max.z) / 2;     // center of worldZ
+                } else {
+                    // Left/right share worldZ with bottom. Snail crosses in worldX direction.
+                    // left/right 2D x = worldZ, so startPos2D.x / goal.x = worldZ value
+                    midX = (bounds.min.x + bounds.max.x) / 2;     // center of worldX
+                    midY = startIsCloser ? startPos2D.x : goal.x; // shared worldZ
+                }
+                break;
+        }
+
+        return { distance: pathDistance, wallPosition: { x: midX, y: midY } };
+    }
+    
+
     update(inhabitants: Inhabitant[]): void {
+        // Call parent update to handle position physics
+        super.update(inhabitants);
+        
         this.frameCounter++;
         
         // Update hunger factor
@@ -611,179 +583,206 @@ export class Snail extends Inhabitant {
         // Handle life cycle updates
         this.updateLifeCycle(inhabitants);
         
-        // If snail is dying or in egg phase, don't move
-        if (this.lifeState === 'dying' || this.lifeState === 'egg') {
+        // If snail is in egg laying phase, dying, shell, or dead, don't move
+        if (this.lifeState === 'egg-laying' || this.lifeState === 'dying' || this.lifeState === 'shell' || this.lifeState === 'dead') {
             return;
         }
         
         if (this.path.length === 0) {
-            if (this.canSetGoals) {
-                this.setNewGoal();
-            }
+            this.setNewGoal();
             return;
         }
 
         // Get tank reference to access algae and food (cache it)
-        if (!this.tank) {
-            this.tank = this.getTank(inhabitants);
-        }
         if (this.tank) {
             this.handleAlgaeInteraction(this.tank);
             this.handleFoodInteraction(this.tank);
         }
 
-        // Decrease eating counter by 1 each frame (minimum 0)
-        this.eatingCounter = Math.max(0, this.eatingCounter - 1);
+        // Decrease eating counter slowly so snail lingers at low speed while munching
+        this.eatingCounter = Math.max(0, this.eatingCounter - 0.4);
 
-        // Very small chance to re-evaluate goal each frame (only if can set goals)
-        if (this.canSetGoals && Math.random() < this.goalReEvaluationChance) {
+        // Very small chance to re-evaluate goal each frame
+        // Suppress re-evaluation shortly after a wall transition or goal set
+        const framesSinceTransition = this.frameCounter - this.lastTransitionFrame;
+        const framesSinceGoal = this.frameCounter - this.lastGoalSetFrame;
+        if (framesSinceTransition > this.TRANSITION_COOLDOWN * 3 && framesSinceGoal > 20 && Math.random() < this.goalReEvaluationChance) {
             this.setNewGoal();
             return;
         }
         
         const currentTarget = this.path[0];
-        const distanceToTarget = this.position.value.distanceTo(currentTarget.position);
         
-        this.moveTowardsCurrentTarget();
+        // Convert current position to 2D coordinates on current wall
+        const currentPos2D = this.world3DToWall(this.position.value, this.wall);
+        
+        // Distance to target (only meaningful if on the same wall)
+        let distanceToTarget = Infinity;
+        if (this.wall === currentTarget.wall) {
+            const dx = currentTarget.x - currentPos2D.x;
+            const dy = currentTarget.y - currentPos2D.y;
+            distanceToTarget = Math.sqrt(dx * dx + dy * dy);
+        }
 
-        // Check if we've reached the current target
-        if (distanceToTarget < 8) {
-            // Remove the reached point from the path
+        // Check if we've reached the current target (only if on same wall)
+        // Cooldown prevents rapid re-picking when snail is sitting on an algae hotspot
+        const framesSinceGoalSet = this.frameCounter - this.lastGoalSetFrame;
+        if (framesSinceGoalSet > 20 && distanceToTarget < (this.size / 2) + 5) {
             this.path.shift();
-            
-            if (this.path.length > 0) {
-                // Switch to the new wall and set movement vector towards next target
-                const nextTarget = this.path[0];
-                if (currentTarget.wall !== this.wall) {
-                    this.transitionToWall(currentTarget.wall);
-                }
-                this.updateAccelerationTowardsTarget(nextTarget.position);
-            } else {
-                // Path completed, set new goal
-                if (this.canSetGoals) {
-                    this.setNewGoal();
-                }
+            if (this.path.length === 0) {
+                this.setNewGoal();
             }
         }
 
-        this.clampPositionToWall();
+        // Check for wall transitions based on edge proximity + path
+        const didWallTransition = this.checkWallTransition();
+
+        // Only move towards target and clamp position if we didn't transition walls
+        if (!didWallTransition) {
+            this.moveTowardsCurrentTarget();
+            this.clampPositionToWall();
+        }
     }
+
+    /** Acceleration magnitude, scales with sqrt(size) and eating state */
+    private getAcceleration(): number {
+        // Base: 0.042 * sqrt(size). At size=50: ~0.30 (preserves current max-size feel)
+        // At size=20: ~0.19, size=10: ~0.13 — smaller snails are noticeably slower
+        const baseAccel = 0.042 * Math.sqrt(this.size);
+
+        // Eating slowdown: sqrt curve drops quickly then lingers at low speed
+        // eatingCounter=0→1.0, =20→0.57, =40→0.40, =80+→0.15
+        const eatingFraction = Math.min(1, this.eatingCounter / 80);
+        const eatingMultiplier = 1 - 0.85 * Math.sqrt(eatingFraction);
+
+        return baseAccel * eatingMultiplier;
+    }
+
 
     private moveTowardsCurrentTarget(): void {
-        if (this.path.length === 0) {
-            this.velocity = Vector.zero();
-            this.acceleration = Vector.zero();
-            return;
-        }
+        if (this.path.length === 0) return;
 
         const currentTarget = this.path[0];
-        this.updateAccelerationTowardsTarget(currentTarget.position);
-        
-        // Apply acceleration to velocity
-        this.velocity.addInPlace(this.acceleration);
-        
-        // Clamp velocity to maximum speed
-        const maxSpeed = this.getCurrentSpeed();
-        const currentSpeed = this.velocity.magnitude();
-        if (currentSpeed > maxSpeed) {
-            this.velocity.normalize().multiplyInPlace(maxSpeed);
-        }
-        
-        // Apply velocity to position
-        this.position.value.addInPlace(this.velocity);
-    }
+        const currentPos2D = this.world3DToWall(this.position.value, this.wall);
 
-    private updateAccelerationTowardsTarget(target: Vector): void {
-        const toTarget = target.copy().subtractInPlace(this.position.value);
-
-        let projectedToTarget: Vector;
-        switch (this.wall) {
-            case 'front':
-            case 'back':
-                projectedToTarget = new Vector(toTarget.x, toTarget.y, 0);
-                break;
-            case 'left':
-            case 'right':
-                projectedToTarget = new Vector(0, toTarget.y, toTarget.z);
-                break;
-            case 'bottom':
-                projectedToTarget = new Vector(toTarget.x, 0, toTarget.z);
-                break;
-        }
-
-        const projectedDistance = projectedToTarget.magnitude();
-        if (projectedDistance > 0) {
-            // Set acceleration to 20% of max speed in the direction of the target
-            const maxSpeed = this.getCurrentSpeed();
-            const accelerationMagnitude = maxSpeed * 0.2;
-            this.acceleration = projectedToTarget.normalize().multiplyInPlace(accelerationMagnitude);
+        let dx: number, dy: number;
+        if (this.wall === currentTarget.wall) {
+            // Same wall: head directly to target in 2D
+            dx = currentTarget.x - currentPos2D.x;
+            dy = currentTarget.y - currentPos2D.y;
         } else {
-            this.acceleration = Vector.zero();
+            // Different wall: head toward the connecting edge point.
+            // This avoids wasting acceleration pushing into perpendicular walls.
+            const edgeTarget = this.getEdgeTarget2D(currentTarget);
+            dx = edgeTarget.x - currentPos2D.x;
+            dy = edgeTarget.y - currentPos2D.y;
         }
+
+        const vector2D: WallPoint = { wall: this.wall, x: dx, y: dy };
+        const acceleration = this.wall2DToWorld3DVelocity(vector2D).normalize().multiply(this.getAcceleration());
+        this.position.applyAcceleration(acceleration, 1);
     }
 
-    private transitionToWall(newWall: Wall): void {
-        const oldWall = this.wall;
-        this.wall = newWall;
-        
-        // Transform the current velocity vector for the new wall orientation
-        const v = this.velocity.copy();
-        switch (`${oldWall}-${newWall}`) {
-            // Front to sides
-            case 'front-left': this.velocity = new Vector(0, v.y, -v.x); break;
-            case 'front-right': this.velocity = new Vector(0, v.y, v.x); break;
-            case 'front-bottom': this.velocity = new Vector(v.x, 0, -v.y); break;
-            
-            // Back to sides
-            case 'back-left': this.velocity = new Vector(0, v.y, v.x); break;
-            case 'back-right': this.velocity = new Vector(0, v.y, -v.x); break;
-            case 'back-bottom': this.velocity = new Vector(v.x, 0, v.y); break;
+    /**
+     * When heading to a different wall, compute the 2D edge target on the current wall.
+     * The target is placed on the connecting edge at the shared coordinate value,
+     * so the snail arrives at the right position when it crosses.
+     */
+    private getEdgeTarget2D(target: WallPoint): { x: number; y: number } {
+        const bounds = this.bounds;
 
-            // Left to sides
-            case 'left-front': this.velocity = new Vector(-v.z, v.y, 0); break;
-            case 'left-back': this.velocity = new Vector(v.z, v.y, 0); break;
-            case 'left-bottom': this.velocity = new Vector(v.z, 0, -v.y); break;
-
-            // Right to sides
-            case 'right-front': this.velocity = new Vector(v.z, v.y, 0); break;
-            case 'right-back': this.velocity = new Vector(-v.z, v.y, 0); break;
-            case 'right-bottom': this.velocity = new Vector(-v.z, 0, -v.y); break;
-
-            // Bottom to sides
-            case 'bottom-front': this.velocity = new Vector(v.x, -v.z, 0); break;
-            case 'bottom-back': this.velocity = new Vector(v.x, v.z, 0); break;
-            case 'bottom-left': this.velocity = new Vector(0, v.z, v.x); break;
-            case 'bottom-right': this.velocity = new Vector(0, v.z, -v.x); break;
-            
+        switch (`${this.wall}-${target.wall}`) {
+            // Side walls to left (edge at x = bounds.min.x, shared: y = worldY)
+            case 'front-left': case 'back-left':
+                return { x: bounds.min.x, y: target.y };
+            // Side walls to right (edge at x = bounds.max.x, shared: y = worldY)
+            case 'front-right': case 'back-right':
+                return { x: bounds.max.x, y: target.y };
+            // Side walls to bottom (edge at y = bounds.max.y, shared: x = worldX)
+            case 'front-bottom': case 'back-bottom':
+                return { x: target.x, y: bounds.max.y };
+            // Left/right to front (edge at z = bounds.min.z → left/right 2D x, shared: y = worldY)
+            case 'left-front': case 'right-front':
+                return { x: bounds.min.z, y: target.y };
+            // Left/right to back (edge at z = bounds.max.z → left/right 2D x, shared: y = worldY)
+            case 'left-back': case 'right-back':
+                return { x: bounds.max.z, y: target.y };
+            // Left/right to bottom (edge at y = bounds.max.y, shared: worldZ = left/right.x = bottom.y)
+            case 'left-bottom': case 'right-bottom':
+                return { x: target.y, y: bounds.max.y };
+            // Bottom to front (edge at z = bounds.min.z → bottom 2D y, shared: x = worldX)
+            case 'bottom-front':
+                return { x: target.x, y: bounds.min.z };
+            // Bottom to back (edge at z = bounds.max.z → bottom 2D y, shared: x = worldX)
+            case 'bottom-back':
+                return { x: target.x, y: bounds.max.z };
+            // Bottom to left (edge at x = bounds.min.x → bottom 2D x, shared: worldZ = bottom.y = left.x)
+            case 'bottom-left':
+                return { x: bounds.min.x, y: target.x };
+            // Bottom to right (edge at x = bounds.max.x → bottom 2D x, shared: worldZ = bottom.y = right.x)
+            case 'bottom-right':
+                return { x: bounds.max.x, y: target.x };
             default:
-                // If no specific transformation, reset velocity vector
-                this.velocity = Vector.zero();
-                break;
+                return { x: this.position.value.x, y: this.position.value.y };
         }
-        
-        this.clampPositionToWall();
     }
 
-    private getWallFromPosition(pos: Vector): Wall {
-        const bounds = Snail.getTankBounds();
-        const dists = {
-            front: Math.abs(pos.z - bounds.minZ),
-            back: Math.abs(pos.z - bounds.maxZ),
-            left: Math.abs(pos.x - bounds.minX),
-            right: Math.abs(pos.x - bounds.maxX),
-            bottom: Math.abs(pos.y - bounds.maxY)
-        };
-
-        let closestWall: Wall = 'front';
-        let minDist = dists.front;
-
-        for (const [wall, dist] of Object.entries(dists)) {
-            if (dist < minDist) {
-                minDist = dist;
-                closestWall = wall as Wall;
-            }
+    /**
+     * Path-aware wall transition: only transitions when the next path target
+     * is on an adjacent wall AND we're at the connecting edge.
+     * This prevents reactive transitions that conflict with the planned path.
+     */
+    private checkWallTransition(): boolean {
+        // Cooldown: don't transition too rapidly
+        if (this.frameCounter - this.lastTransitionFrame < this.TRANSITION_COOLDOWN) {
+            return false;
         }
-        return closestWall;
+
+        // Only transition if the path calls for it
+        if (this.path.length === 0) return false;
+
+        const targetWall = this.path[0].wall;
+        if (targetWall === this.wall) return false; // Same wall, no transition needed
+
+        // Must be adjacent
+        if (!this.getAdjacentWalls(this.wall).includes(targetWall)) return false;
+
+        const bounds = this.bounds;
+        const pos = this.position.value;
+        const edgeThreshold = this.size / 2 + 5;
+
+        // Check if we're at the specific edge connecting current wall to target wall
+        let atEdge = false;
+        switch (`${this.wall}-${targetWall}`) {
+            case 'front-left': case 'back-left':
+                atEdge = pos.x - bounds.min.x < edgeThreshold; break;
+            case 'front-right': case 'back-right':
+                atEdge = bounds.max.x - pos.x < edgeThreshold; break;
+            case 'front-bottom': case 'back-bottom': case 'left-bottom': case 'right-bottom':
+                atEdge = bounds.max.y - pos.y < edgeThreshold; break;
+            case 'left-front': case 'right-front':
+                atEdge = pos.z - bounds.min.z < edgeThreshold; break;
+            case 'left-back': case 'right-back':
+                atEdge = bounds.max.z - pos.z < edgeThreshold; break;
+            case 'bottom-front':
+                atEdge = pos.z - bounds.min.z < edgeThreshold; break;
+            case 'bottom-back':
+                atEdge = bounds.max.z - pos.z < edgeThreshold; break;
+            case 'bottom-left':
+                atEdge = pos.x - bounds.min.x < edgeThreshold; break;
+            case 'bottom-right':
+                atEdge = bounds.max.x - pos.x < edgeThreshold; break;
+        }
+
+        if (!atEdge) return false;
+
+        // Perform transition
+        this.wall = targetWall;
+        this.lastTransitionFrame = this.frameCounter;
+        this.position.delta = Vector.zero();
+        this.position.ddelta = Vector.zero();
+        this.clampPositionToWall();
+        return true;
     }
 
     private getAdjacentWalls(wall: Wall): Wall[] {
@@ -798,41 +797,30 @@ export class Snail extends Inhabitant {
     }
 
     private clampPositionToWall() {
-        const bounds = Snail.getTankBounds();
+        const bounds = this.bounds;
         const pos = this.position.value;
 
-        pos.x = Math.max(bounds.minX, Math.min(bounds.maxX, pos.x));
-        pos.y = Math.max(bounds.minY, Math.min(bounds.maxY, pos.y));
-        pos.z = Math.max(bounds.minZ, Math.min(bounds.maxZ, pos.z));
+        pos.x = Math.max(bounds.min.x, Math.min(bounds.max.x, pos.x));
+        pos.y = Math.max(bounds.min.y, Math.min(bounds.max.y, pos.y));
+        pos.z = Math.max(bounds.min.z, Math.min(bounds.max.z, pos.z));
 
         switch (this.wall) {
             case 'front':
-                pos.z = bounds.minZ + this.wallOffset;
+                pos.z = bounds.min.z + this.wallOffset;
                 break;
             case 'back':
-                pos.z = bounds.maxZ - this.wallOffset;
+                pos.z = bounds.max.z - this.wallOffset;
                 break;
             case 'left':
-                pos.x = bounds.minX + this.wallOffset;
+                pos.x = bounds.min.x + this.wallOffset;
                 break;
             case 'right':
-                pos.x = bounds.maxX - this.wallOffset;
+                pos.x = bounds.max.x - this.wallOffset;
                 break;
             case 'bottom':
-                pos.y = bounds.maxY - this.wallOffset;
+                pos.y = bounds.max.y - this.wallOffset;
                 break;
         }
-    }
-
-    private getTank(inhabitants: Inhabitant[]): Tank | null {
-        // Find tank by looking for it in the inhabitants array or by accessing it through context
-        // This is a bit of a hack, but we need access to the tank
-        for (const inhabitant of inhabitants) {
-            if ((inhabitant as any).tank) {
-                return (inhabitant as any).tank;
-            }
-        }
-        return null;
     }
 
     // Public method to set tank reference directly (more efficient)
@@ -856,22 +844,22 @@ export class Snail extends Inhabitant {
         const pos = this.position.value;
         const searchRadius = this.size / 2;
         
-        // Check for algae within radius around snail's center
+        // Check for algae within radius around snail's center using 2D wall coordinates
         const algaePositionsToCheck = this.getAlgaePositionsInRadius(pos, searchRadius);
         
         for (const checkPos of algaePositionsToCheck) {
-            const algaeLevel = tank.algae.getAlgaeLevel(this.wall, checkPos.x, checkPos.y, checkPos.z);
+            const algaeLevel = tank.algae.getAlgaeLevel(this.wall, checkPos.wallX, checkPos.wallY);
             
             if (algaeLevel > 0) {
-                // Create a unique key for this algae position based on grid coordinates
-                const algaeKey = `${this.wall}-${Math.floor(checkPos.x/4)}-${Math.floor(checkPos.y/4)}-${Math.floor(checkPos.z/4)}`;
+                // Create a unique key for this algae position based on 2D wall coordinates
+                const algaeKey = `${this.wall}-${Math.floor(checkPos.wallX/4)}-${Math.floor(checkPos.wallY/4)}`;
                 
                 // If we haven't covered this algae square yet, mark it as covered
                 if (!this.coveredAlgaePositions.has(algaeKey)) {
                     this.coveredAlgaePositions.add(algaeKey);
                 } else {
                     // We've been on this algae square for multiple frames, eat it
-                    tank.algae.removeAlgae(this.wall, checkPos.x, checkPos.y, checkPos.z);
+                    tank.algae.removeAlgae(this.wall, checkPos.wallX, checkPos.wallY);
                     this.coveredAlgaePositions.delete(algaeKey);
                     
                     // Increase eating counter by algae level (max 200) - this affects movement speed
@@ -892,9 +880,9 @@ export class Snail extends Inhabitant {
         // Check for settled food within radius around snail's center
         for (const food of tank.food) {
             if (food.settled) {
-                const distance = pos.distanceTo(food.position.value);
+                const distance = this.wallDistance(pos, this.wall, food.position.value, 'bottom');
                 if (distance <= searchRadius) {
-                    console.log('eating food', distance);
+                    
                     // Eat the food and remove it from the tank
                     tank.removeFood(food);
                     
@@ -912,46 +900,31 @@ export class Snail extends Inhabitant {
         }
     }
 
-    private getAlgaePositionsInRadius(center: Vector, radius: number): Vector[] {
-        const positions: Vector[] = [];
+    private getAlgaePositionsInRadius(center: Vector, radius: number): { wallX: number, wallY: number }[] {
+        const positions: { wallX: number, wallY: number }[] = [];
         const gridSize = 4; // Algae square size
         
-        // Optimized: Only check 2D positions on the current wall
-        // This reduces complexity from O(n³) to O(n²)
-        const wallBounds = this.getWallBounds();
-        const minX = Math.max(wallBounds.minX, center.x - radius);
-        const maxX = Math.min(wallBounds.maxX, center.x + radius);
-        const minY = Math.max(wallBounds.minY, center.y - radius);
-        const maxY = Math.min(wallBounds.maxY, center.y + radius);
+        // Convert 3D position to 2D wall coordinates
+        const centerPos2D = this.world3DToWall(center, this.wall);
+        const centerWallX = centerPos2D.x;
+        const centerWallY = centerPos2D.y;
         
-        // Calculate z based on current wall
-        let z = center.z; // Default to current z
-        switch (this.wall) {
-            case 'front':
-                z = wallBounds.minZ + this.wallOffset;
-                break;
-            case 'back':
-                z = wallBounds.maxZ - this.wallOffset;
-                break;
-            case 'left':
-                z = center.z; // Keep current z for side walls
-                break;
-            case 'right':
-                z = center.z; // Keep current z for side walls
-                break;
-        }
+        // Get wall bounds in 2D coordinates
+        const wall2DBounds = this.getWall2DBounds();
         
-        // Generate grid positions within the radius (2D only)
-        for (let x = Math.floor(minX / gridSize) * gridSize; x <= maxX; x += gridSize) {
-            for (let y = Math.floor(minY / gridSize) * gridSize; y <= maxY; y += gridSize) {
-                // Use squared distance to avoid square root calculation
-                const dx = x - center.x;
-                const dy = y - center.y;
+        const minWallX = Math.max(wall2DBounds.minWallX, centerWallX - radius);
+        const maxWallX = Math.min(wall2DBounds.maxWallX, centerWallX + radius);
+        const minWallY = Math.max(wall2DBounds.minWallY, centerWallY - radius);
+        const maxWallY = Math.min(wall2DBounds.maxWallY, centerWallY + radius);
+        
+        for (let wallX = Math.floor(minWallX / gridSize) * gridSize; wallX <= maxWallX; wallX += gridSize) {
+            for (let wallY = Math.floor(minWallY / gridSize) * gridSize; wallY <= maxWallY; wallY += gridSize) {
+                const dx = wallX - centerWallX;
+                const dy = wallY - centerWallY;
                 const distanceSquared = dx * dx + dy * dy;
                 
-                // Check if this grid position is within radius (squared)
                 if (distanceSquared <= radius * radius) {
-                    positions.push(new Vector(x, y, z));
+                    positions.push({ wallX, wallY });
                 }
             }
         }
@@ -959,11 +932,38 @@ export class Snail extends Inhabitant {
         return positions;
     }
 
-    private getCurrentSpeed(): number {
-        // Speed = baseSpeed * (1 - eatingCounter/100)
-        const speedMultiplier = 1 - Math.min(1, this.eatingCounter / 100);
-        return this.baseSpeed * speedMultiplier;
+
+    // Get wall bounds in 2D wall coordinate space
+    private getWall2DBounds(): { minWallX: number, maxWallX: number, minWallY: number, maxWallY: number } {
+        const bounds = this.bounds;
+        
+        switch (this.wall) {
+            case 'front':
+            case 'back':
+                return {
+                    minWallX: bounds.min.x,
+                    maxWallX: bounds.max.x,
+                    minWallY: bounds.min.y,
+                    maxWallY: bounds.max.y
+                };
+            case 'left':
+            case 'right':
+                return {
+                    minWallX: bounds.min.z,
+                    maxWallX: bounds.max.z,
+                    minWallY: bounds.min.y,
+                    maxWallY: bounds.max.y
+                };
+            case 'bottom':
+                return {
+                    minWallX: bounds.min.x,
+                    maxWallX: bounds.max.x,
+                    minWallY: bounds.min.z,
+                    maxWallY: bounds.max.z
+                };
+        }
     }
+
 
     private updateLifeCycle(inhabitants: Inhabitant[]): void {
         switch (this.lifeState) {
@@ -973,126 +973,86 @@ export class Snail extends Inhabitant {
             case 'egg-laying':
                 this.updateEggLayingPhase();
                 break;
-            case 'egg':
-                this.updateEggPhase();
-                break;
             case 'dying':
                 this.updateDyingPhase();
                 break;
             case 'shell':
                 this.updateShellPhase();
                 break;
+            case 'dead':
+                this.updateDeadPhase();
+                break;
         }
-        
-
     }
 
     private updateNormalLifeCycle(): void {
-        // Check for reproduction conditions
+        // Check for reproduction conditions (less frequent than original)
         if (this.hunger.value < 0.2 && this.size >= 15) {
-            // 1/100 chance per frame to enter egg-laying phase
-            if (Math.random() < 0.001) {
+            // 1/5000 chance per frame to enter egg laying phase (much less frequent than original)
+            if (Math.random() < 0.0002) {
                 this.enterEggLayingPhase();
             }
         }
 
         // Check for death conditions
         if (this.hunger.value >= 1.0) {
-            // 1/100 chance per frame to die
-            if (Math.random() < 0.0005) {
+            // 1/1000 chance per frame to die when starving
+            if (Math.random() < 0.1) {
                 this.enterDyingPhase();
             }
         }
 
         // Check for growth
         const growthChance = (1 - this.hunger.value) / 500;
-        if (Math.random() < growthChance) {
+        if (this.size < this.maxSize && Math.random() < growthChance) {
             this.grow();
         }
     }
 
-    private updateEggLayingPhase(): void {
-        this.lifeStateCounter++;
-        
-        if (this.lifeStateCounter >= 300) {
-            // Egg-laying phase complete, spawn new snail
-            this.spawnNewSnail();
-            // Return to normal state
-            this.lifeState = 'normal';
-            this.lifeStateCounter = 0;
-            this.canSetGoals = true;
-            this.hunger.value = Math.min(1, this.hunger.value + 0.2);
-        }
-    }
-
-    private updateEggPhase(): void {
-        this.lifeStateCounter--;
-        
-        if (this.lifeStateCounter <= 0) {
-            // Egg hatched, enter normal state
-            this.lifeState = 'normal';
-            this.lifeStateCounter = 0;
-            this.canSetGoals = true;
-            // Set a random goal to start moving
-            this.setNewGoal();
-        }
-    }
-
-    private updateDyingPhase(): void {
-        this.lifeStateCounter++;
-        
-        // Gradually decrease opacity over 1000 frames
-        this.opacity = Math.max(0, 255 - (this.lifeStateCounter * 255 / 1000));
-        
-        if (this.lifeStateCounter >= 1000) {
-            // Death complete, transition to shell phase
-            this.enterShellPhase();
-        }
-    }
-
-    private updateShellPhase(): void {
-        if (!this.shellSettled) {
-            // Shell is still falling - keep full opacity
-            this.opacity = 255;
-            this.updateShellFalling();
-        } else {
-            // Shell has settled, fade out over 1000 frames
-            this.lifeStateCounter++;
-            this.opacity = Math.max(0, 255 - (this.lifeStateCounter * 255 / 1000));
-            
-            if (this.lifeStateCounter >= 1000) {
-                // Shell fade complete, mark for removal
-                this.markForRemoval();
-            }
-        }
-    }
-
-    private updateShellFalling(): void {
-        // Apply gravity to make shell fall to bottom
-        const gravity = 0.5;
-        this.velocity.y += gravity;
-        
-        // Apply velocity to position
-        this.position.value.addInPlace(this.velocity);
-        
-        // Check if shell has reached the bottom
-        const bounds = Snail.getTankBounds();
-        if (this.position.value.y >= bounds.maxY - this.wallOffset) {
-            // Shell has settled at the bottom
-            this.shellSettled = true;
-            this.lifeStateCounter = 0; // Reset counter for fade phase
-            this.velocity = Vector.zero(); // Stop falling
-            this.position.value.y = bounds.maxY - this.wallOffset; // Clamp to bottom
-        }
+    private grow(): void {
+        this.size += 1;
+        this.hunger.value = Math.min(1, this.hunger.value + 0.05); // Increase hunger by 10%
+        this.wallOffset = this.size / 2; // Update wall offset for new size
     }
 
     private enterEggLayingPhase(): void {
         this.lifeState = 'egg-laying';
         this.lifeStateCounter = 0;
         this.canSetGoals = false;
-        // Set movement speed to 0
-        this.velocity = Vector.zero();
-        this.acceleration = Vector.zero();
+        // Stop moving
+        this.position.delta = Vector.zero();
+        // Acceleration is now handled by Position system
+        console.log(`🥚 Snail entering egg laying phase at (${this.position.value.x.toFixed(1)}, ${this.position.value.y.toFixed(1)}, ${this.position.value.z.toFixed(1)}) on ${this.wall} wall`);
+    }
+
+    private updateEggLayingPhase(): void {
+        this.lifeStateCounter++;
+        
+        // Egg laying phase lasts 120 frames (2 seconds at 60fps)
+        if (this.lifeStateCounter >= 120) {
+            // Egg laying phase complete, lay the egg clump
+            this.layEggClump();
+            // Return to normal state
+            this.lifeState = 'normal';
+            this.lifeStateCounter = 0;
+            this.canSetGoals = true;
+        }
+    }
+
+    private layEggClump(): void {
+        if (!this.tank) return;
+        
+        // Create egg clump at current position
+        const eggPosition = this.position.value.copy();
+        const eggClump = new EggClump(eggPosition, this.wall);
+        
+        // Add to tank
+        this.tank.addEggClump(eggClump);
+        
+        // Increase hunger after laying eggs (reproduction is costly)
+        this.hunger.value = Math.min(1, this.hunger.value + 0.75);
+        
+        console.log(`🥚 Snail laid egg clump at (${eggPosition.x.toFixed(1)}, ${eggPosition.y.toFixed(1)}, ${eggPosition.z.toFixed(1)}) on ${this.wall} wall`);
     }
 
     private enterDyingPhase(): void {
@@ -1100,8 +1060,21 @@ export class Snail extends Inhabitant {
         this.lifeStateCounter = 0;
         this.canSetGoals = false;
         // Stop moving
-        this.velocity = Vector.zero();
-        this.acceleration = Vector.zero();
+        this.position.delta = Vector.zero();
+        // Acceleration is now handled by Position system
+        console.log(`💀 Snail entering dying phase at (${this.position.value.x.toFixed(1)}, ${this.position.value.y.toFixed(1)}, ${this.position.value.z.toFixed(1)}) on ${this.wall} wall`);
+    }
+
+    private updateDyingPhase(): void {
+        this.lifeStateCounter++;
+        
+        // Gradually decrease opacity over 1000 frames (about 16 seconds at 60fps)
+        this.opacity = Math.max(0, 255 - (this.lifeStateCounter * 255 / 1000));
+        
+        if (this.lifeStateCounter >= 1000) {
+            // Death complete, transition to shell phase
+            this.enterShellPhase();
+        }
     }
 
     private enterShellPhase(): void {
@@ -1117,52 +1090,70 @@ export class Snail extends Inhabitant {
         this.wallOffset = this.size / 2;
         
         // Set initial velocity for falling
-        this.velocity = Vector.zero();
-        this.acceleration = Vector.zero();
+        this.position.delta = Vector.zero();
+        // Acceleration is now handled by Position system
+        
+        console.log(`🐚 Snail shell falling at (${this.position.value.x.toFixed(1)}, ${this.position.value.y.toFixed(1)}, ${this.position.value.z.toFixed(1)})`);
     }
 
-    private spawnNewSnail(): void {
-        if (!this.tank) return;
-        
-        // Create new snail at size 2 near the parent
-        const parentPos = this.position.value;
-        const startWall = this.wall;
-        const startPos = Snail.getRandomPositionOnWall(startWall, 5);
-        
-        // Ensure the new snail is close to the parent
-        const offset = 20;
-        startPos.x = Math.max(parentPos.x - offset, Math.min(parentPos.x + offset, startPos.x));
-        startPos.y = Math.max(parentPos.y - offset, Math.min(parentPos.y + offset, startPos.y));
-        startPos.z = Math.max(parentPos.z - offset, Math.min(parentPos.z + offset, startPos.z));
-        
-        const newSnail = new Snail(2); // Start at size 2
-        newSnail.position.value = startPos;
-        newSnail.wall = startWall;
-        newSnail.setTank(this.tank);
-        
-        // Add to tank (we'll need to add a method for this)
-        this.tank.addSnail(newSnail);
+    private updateShellPhase(): void {
+        if (!this.shellSettled) {
+            // Shell is still falling - keep full opacity
+            this.opacity = 255;
+            this.updateShellFalling();
+        } else {
+            // Shell has settled, transition to dead phase
+            this.enterDeadPhase();
+        }
     }
 
-    private grow(): void {
-        this.size += 1;
-        this.hunger.value = Math.min(1, this.hunger.value + 0.05); // Increase hunger by 10%
-        this.baseSpeed = 0.1 * Math.pow(this.size, 0.5); // Update base speed with new formula
-        this.wallOffset = this.size / 2; // Update wall offset for new size
+    private updateShellFalling(): void {
+        // Apply slower gravity to make shell fall more slowly
+        const gravity = 0.2; // Reduced from 0.5 to 0.2 for slower falling
+        this.position.delta.y += gravity;
+        
+        // Position will be updated automatically by Position.update() in the normal update cycle
+        
+        // Check if shell has reached the gravel surface (not below gravel)
+        const bounds = this.bounds;
+        const gravelSurface = bounds.max.y - TANK_CONSTANTS.GRAVEL_HEIGHT; // Land on gravel surface
+        if (this.position.value.y >= gravelSurface - this.wallOffset) {
+            // Shell has settled on the gravel surface
+            this.shellSettled = true;
+            this.position.delta = Vector.zero(); // Stop falling
+            this.position.value.y = gravelSurface - this.wallOffset; // Clamp to gravel surface
+            console.log(`🐚 Shell settled on gravel surface`);
+        }
+    }
+
+    private enterDeadPhase(): void {
+        this.lifeState = 'dead';
+        this.lifeStateCounter = 0;
+        this.canSetGoals = false;
+        this.opacity = 255; // Start fade from full opacity
+        console.log(`💀 Shell entering dead phase - will fade over 30 seconds`);
+    }
+
+    private updateDeadPhase(): void {
+        this.lifeStateCounter++;
+        
+        // Fade out over 1800 frames (30 seconds at 60fps)
+        this.opacity = Math.max(0, 255 - (this.lifeStateCounter * 255 / 1800));
+        
+        if (this.lifeStateCounter >= 1800) {
+            // Fade complete, mark for removal
+            this.markForRemoval();
+        }
     }
 
     private markForRemoval(): void {
         // This will be handled by the tank's update method
         // We'll add a flag to indicate the snail should be removed
-        this.lifeState = 'dying';
-        this.lifeStateCounter = 1000; // Ensure it stays in dying state
+        this.lifeState = 'dead';
+        this.lifeStateCounter = 1800; // Ensure it stays in dead state
     }
 
-    // Public method to check if snail should be removed
-    public shouldBeRemoved(): boolean {
-        return (this.lifeState === 'dying' && this.lifeStateCounter >= 1000) ||
-               (this.lifeState === 'shell' && this.lifeStateCounter >= 1000);
-    }
+
 
     // Public method to get hunger value
     public getHungerValue(): number {
@@ -1174,13 +1165,32 @@ export class Snail extends Inhabitant {
         return this.lifeState;
     }
 
-    private getSpriteIndexAndRotation(): { index: number; rotation: number; mirrored: boolean } {
-        // If snail is in shell phase, always use empty shell sprite
-        if (this.lifeState === 'shell') {
-            return { index: 6, rotation: 0, mirrored: false }; // Empty shell sprite
-        }
+    // Public method to check if snail should be removed
+    public shouldBeRemoved(): boolean {
+        return (this.lifeState === 'dead' && this.lifeStateCounter >= 1800);
+    }
+
+    // Public method to set a random goal (useful for baby snails)
+    public setRandomGoal(): void {
+        if (!this.canSetGoals) return;
         
-        const delta = this.velocity;
+        const goalWall = this.getRandomWall();
+        const goalPosition = this.getRandomPositionOnWall(goalWall, this.wallOffset);
+        
+        // Convert Vector to Goal format
+        this.goal = {
+            wall: goalWall,
+            x: goalPosition.x,
+            y: goalPosition.y
+        };
+        
+        this.path = this.generatePath(this.goal);
+        console.log(`🎯 Baby snail set random goal on ${goalWall} wall`);
+    }
+
+    private getSpriteIndexAndRotation(): { index: number; rotation: number; mirrored: boolean } {
+        
+        const delta = this.position.delta;
         
         // Handle front and back walls specially - use top/bottom sprites with rotation
         if (this.wall === 'front') {
@@ -1265,39 +1275,27 @@ export class Snail extends Inhabitant {
     }
 
     render(tank: Tank, _color?: p5.Color): void {
-        if (!Snail.spritesheet) {
-            // Fallback to circle rendering if spritesheet not loaded
-            const relativeDepth = this.position.z / tank.depth;
-            const renderX = lerp(tank.x, tank.backX, relativeDepth) + (this.position.x - tank.x) * lerp(1, 0.7, relativeDepth);
-            const renderY = lerp(tank.y, tank.backY, relativeDepth) + (this.position.y - tank.y) * lerp(1, 0.7, relativeDepth);
-            const depthScale = lerp(1, 0.7, relativeDepth);
-            const renderSize = this.size * depthScale;
-
-            push();
-            fill(139, 69, 19, Math.floor(this.opacity)); // Brown color for snail with opacity
-            noStroke();
-            ellipse(renderX, renderY, renderSize, renderSize);
-            pop();
-            return;
-        }
-
         // Use sprite rendering
         const relativeDepth = this.position.z / tank.depth;
         const renderX = lerp(tank.x, tank.backX, relativeDepth) + (this.position.x - tank.x) * lerp(1, 0.7, relativeDepth);
-        const renderY = lerp(tank.y, tank.backY, relativeDepth) + (this.position.y - tank.y) * lerp(1, 0.7, relativeDepth);
+        const renderY = lerp(tank.y, tank.backY, relativeDepth) + (this.position.y - tank.y) * lerp(1, 0.667, relativeDepth);
         
         // Scale size based on depth
         const depthScale = lerp(1, 0.7, relativeDepth);
         const { index, rotation, mirrored } = this.getSpriteIndexAndRotation();
         const spriteConfig = Snail.SPRITE_CONFIGS[index];
         
+        // If snail is in shell or dead phase, always use empty shell sprite
+        const finalIndex = (this.lifeState === 'shell' || this.lifeState === 'dead') ? 6 : index;
+        const finalSpriteConfig = Snail.SPRITE_CONFIGS[finalIndex];
+        
         // Use height as the consistent scaling factor
         const MAX_SPRITE_HEIGHT = 32; // Height of sprites
         
         // Calculate scale based on the snail's size and the sprite height
         const scale_size = (this.size * depthScale) / MAX_SPRITE_HEIGHT;
-        const spriteWidth = spriteConfig.width * scale_size;
-        const spriteHeight = spriteConfig.height * scale_size;
+        const spriteWidth = finalSpriteConfig.width * scale_size;
+        const spriteHeight = finalSpriteConfig.height * scale_size;
         
         // Save current transformation state
         push();
@@ -1314,24 +1312,24 @@ export class Snail extends Inhabitant {
         // Draw the sprite centered at origin (which is now at the snail's position)
         // Apply opacity by using tint
         if (this.opacity < 255) {
-            // Note: p5.js doesn't support alpha in image() directly, so we'll use the fallback circle for dying snails
+            // Note: p5.js doesn't support alpha in image() directly, so we'll use the fallback circle for dying/dead snails
             // This ensures opacity is properly handled
             pop(); // Restore transformation state
             push();
             fill(139, 69, 19, Math.floor(this.opacity));
             noStroke();
             ellipse(0, 0, spriteWidth, spriteHeight);
-        } else {
+        } else if (Snail.spritesheet) {
             image(
                 Snail.spritesheet,
                 -spriteWidth/2,
                 -spriteHeight/2,
                 spriteWidth,
                 spriteHeight,
-                spriteConfig.x,
-                spriteConfig.y,
-                spriteConfig.width,
-                spriteConfig.height
+                finalSpriteConfig.x,
+                finalSpriteConfig.y,
+                finalSpriteConfig.width,
+                finalSpriteConfig.height
             );
         }
         

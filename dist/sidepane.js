@@ -1,7 +1,7 @@
 import { EmberTetra } from './inhabitants/embertetra.js';
 import { UserFish } from './inhabitants/userfish.js';
 import { Fish } from './inhabitants/fish.js';
-import { Snail } from './inhabitants/snail_new.js';
+import { Snail } from './inhabitants/snail.js';
 import { getTankBounds } from './constants.js';
 // p5.js constants
 const CENTER = 'center';
@@ -449,8 +449,7 @@ export class SidePane {
             text(`Hunger: ${hungerValue}%${feedingStatus}`, infoX, infoY + 9);
         }
         else if (fish instanceof Snail) {
-            // Size and wall information
-            text(`Size: ${fish.size} | Wall: ${fish.getWall()}`, infoX, infoY - 9);
+            text(`Size: ${fish.size}`, infoX, infoY - 9);
             // Hunger and life state information
             const hungerValue = Math.round(fish.getHungerValue() * 100);
             const lifeState = fish.getLifeState();

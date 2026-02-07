@@ -150,6 +150,8 @@ export class Algae {
         
         // Side walls (depth represents the "width" of the side walls)
         const sideWidth = TANK_CONSTANTS.DEPTH;
+        // Actual physical side wall range is [MIN_Z, DEPTH], so grid should only cover that span
+        const sideGridWidth = TANK_CONSTANTS.DEPTH - TANK_CONSTANTS.MIN_Z;
         
         this.wallDimensions = {
             front: {
@@ -168,13 +170,13 @@ export class Algae {
             left: {
                 width: sideWidth,
                 height: totalHeight,
-                gridCols: Math.floor(sideWidth / this.squareSize),
+                gridCols: Math.floor(sideGridWidth / this.squareSize),
                 gridRows: Math.floor(totalHeight / this.squareSize)
             },
             right: {
                 width: sideWidth,
                 height: totalHeight,
-                gridCols: Math.floor(sideWidth / this.squareSize),
+                gridCols: Math.floor(sideGridWidth / this.squareSize),
                 gridRows: Math.floor(totalHeight / this.squareSize)
             }
         };
