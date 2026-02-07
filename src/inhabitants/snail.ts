@@ -39,8 +39,8 @@ const SHELL_GRAVITY = 0.5;
 
 // Reproduction & growth
 const EGG_HUNGER_THRESHOLD = 0.30;
-const EGG_MIN_SIZE = 15;
-const EGG_CHANCE_PER_FRAME = 0.0005;
+const EGG_MIN_SIZE = 20;
+const EGG_CHANCE_PER_FRAME = 0.001;
 const STARVATION_DEATH_CHANCE = 0.1;
 const POST_EGG_HUNGER_COST = 0.50;
 const GROWTH_HUNGER_COST = 0.05;
@@ -73,7 +73,7 @@ const BASE_HUNGER_INCREASE_RATE = 0.0001;
 // Rendering
 const SNAIL_SPRITE_HEIGHT = 32;
 
-type SnailLifeState = 'normal' | 'egg-laying' | 'dying' | 'shell' | 'dead';
+export type SnailLifeState = 'normal' | 'egg-laying' | 'dying' | 'shell' | 'dead';
 
 export class Snail extends Inhabitant {
     static spritesheet: p5.Image | null = null;
@@ -808,6 +808,30 @@ export class Snail extends Inhabitant {
         return (this.lifeState === 'dead' && this.lifeStateCounter >= DEAD_FADE_FRAMES);
     }
 
+    public getWall(): Wall { return this.wall; }
+    public getLifeStateCounter(): number { return this.lifeStateCounter; }
+    public getOpacity(): number { return this.opacity; }
+    public getShellSettled(): boolean { return this.shellSettled; }
+    public getCanSetGoals(): boolean { return this.canSetGoals; }
+
+    public loadSaveState(state: {
+        lifeState: SnailLifeState,
+        lifeStateCounter: number,
+        eatingCounter: number,
+        opacity: number,
+        shellSettled: boolean,
+        canSetGoals: boolean,
+        velocity: Vector
+    }): void {
+        this.lifeState = state.lifeState;
+        this.lifeStateCounter = state.lifeStateCounter;
+        this.eatingCounter = state.eatingCounter;
+        this.opacity = state.opacity;
+        this.shellSettled = state.shellSettled;
+        this.canSetGoals = state.canSetGoals;
+        this.position.delta = state.velocity;
+    }
+
     public setRandomGoal(): void {
         if (!this.canSetGoals) return;
         
@@ -817,6 +841,10 @@ export class Snail extends Inhabitant {
         this.goal = { wall: goalWall, x: goalPosition.x, y: goalPosition.y };
         this.path = this.generatePath(this.goal);
         console.log(`🎯 Baby snail set random goal on ${goalWall} wall`);
+    }
+
+    public getSpriteInfo(): { index: number; rotation: number; mirrored: boolean } {
+        return this.getSpriteIndexAndRotation();
     }
 
     private getSpriteIndexAndRotation(): { index: number; rotation: number; mirrored: boolean } {

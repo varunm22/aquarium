@@ -108,6 +108,9 @@ export abstract class Fish extends Inhabitant {
     public getSmelledFoodDirection(): Vector | null { return this.hunger.getSmelledFoodDirection(); }
     public setSmelledFoodDirection(direction: Vector | null): void { this.hunger.setSmelledFoodDirection(direction); }
 
+    public setFearValue(value: number): void { this.fear.value = value; }
+    public setHungerValue(value: number): void { this.hunger.value = value; }
+
     update(inhabitants: Inhabitant[]): void {
         if (this.splash > 0) this.splash--;
 

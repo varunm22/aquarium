@@ -5,6 +5,7 @@ import { UserFish } from './inhabitants/userfish.js';
 import { Fish } from './inhabitants/fish.js';
 import { Snail } from './inhabitants/snail.js';
 import { getTankBounds } from './constants.js';
+import { handleSave, handleLoad, isModalOpen } from './save-load.js';
 
 declare function fill(r: number, g: number, b: number, a?: number): void;
 declare function stroke(r: number, g: number, b: number): void;
@@ -201,6 +202,7 @@ export class SidePane {
 
         this.renderHeader();
         this.renderFooter();
+        this.renderSaveLoadButtons();
         this.mouseWasPressed = mouseIsPressed;
     }
 
@@ -481,6 +483,50 @@ export class SidePane {
                 } else {
                     const index = this.tank.fish.indexOf(fish);
                     if (index > -1) this.tank.fish.splice(index, 1);
+                }
+            }
+        }
+    }
+
+    private renderSaveLoadButtons(): void {
+        const buttonGap = 10;
+        const buttonHeight = 30;
+        const buttonY = this.y + this.height + buttonGap;
+        const halfWidth = (this.width - this.padding) / 2;
+
+        // Save button
+        const saveX = this.x;
+        fill(100, 160, 220);
+        stroke(60, 120, 180);
+        strokeWeight(1);
+        rect(saveX, buttonY, halfWidth, buttonHeight);
+
+        fill(255, 255, 255);
+        noStroke();
+        textSize(13);
+        textAlign(CENTER, CENTER);
+        text('Save', saveX + halfWidth / 2, buttonY + buttonHeight / 2);
+
+        // Load button
+        const loadX = this.x + halfWidth + this.padding;
+        fill(100, 160, 220);
+        stroke(60, 120, 180);
+        strokeWeight(1);
+        rect(loadX, buttonY, halfWidth, buttonHeight);
+
+        fill(255, 255, 255);
+        noStroke();
+        textSize(13);
+        textAlign(CENTER, CENTER);
+        text('Load', loadX + halfWidth / 2, buttonY + buttonHeight / 2);
+
+        // Click handling
+        if (this.mouseWasPressed && !mouseIsPressed && !isModalOpen()) {
+            if (mouseY >= buttonY && mouseY <= buttonY + buttonHeight) {
+                if (mouseX >= saveX && mouseX <= saveX + halfWidth) {
+                    handleSave(this.tank);
+                } else if (mouseX >= loadX && mouseX <= loadX + halfWidth) {
+                    handleLoad(this.tank);
                 }
             }
         }

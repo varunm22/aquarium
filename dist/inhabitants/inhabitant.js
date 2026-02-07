@@ -9,10 +9,14 @@ export class Inhabitant {
     isInFieldOfView(other, maxAngle = 45, maxDistance = 200) {
         const disp = other.position.value.subtract(this.position.value);
         const distance = this.distanceTo(other);
-        const disp_norm = disp.divide(disp.magnitude());
-        const fish_dir = this.position.delta.divide(this.position.delta.magnitude());
+        const dispMag = disp.magnitude();
+        const deltaMag = this.position.delta.magnitude();
+        if (dispMag === 0 || deltaMag === 0)
+            return false;
+        const disp_norm = disp.divide(dispMag);
+        const fish_dir = this.position.delta.divide(deltaMag);
         const dotProduct = disp_norm.dotProduct(fish_dir);
-        const angle = Math.acos(dotProduct);
+        const angle = Math.acos(Math.max(-1, Math.min(1, dotProduct)));
         return degrees(angle) <= maxAngle && distance <= maxDistance;
     }
     update(_inhabitants = []) {

@@ -113,6 +113,10 @@ export class EggClump extends Inhabitant {
         return this.hatchTimer < 0;
     }
 
+    public getWall(): Wall { return this.wall; }
+    public getHatchTimer(): number { return this.hatchTimer; }
+    public setHatchTimer(timer: number): void { this.hatchTimer = timer; }
+
     public getHatchProgress(): number {
         return Math.max(0, 1 - (this.hatchTimer / HATCH_FRAMES));
     }

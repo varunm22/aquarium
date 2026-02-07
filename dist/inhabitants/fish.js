@@ -63,6 +63,8 @@ export class Fish extends Inhabitant {
     setFeedingMode(feeding) { this.hunger.setFeeding(feeding); }
     getSmelledFoodDirection() { return this.hunger.getSmelledFoodDirection(); }
     setSmelledFoodDirection(direction) { this.hunger.setSmelledFoodDirection(direction); }
+    setFearValue(value) { this.fear.value = value; }
+    setHungerValue(value) { this.hunger.value = value; }
     update(inhabitants) {
         if (this.splash > 0)
             this.splash--;

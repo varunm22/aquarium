@@ -91,6 +91,9 @@ export class EggClump extends Inhabitant {
     shouldBeRemoved() {
         return this.hatchTimer < 0;
     }
+    getWall() { return this.wall; }
+    getHatchTimer() { return this.hatchTimer; }
+    setHatchTimer(timer) { this.hatchTimer = timer; }
     getHatchProgress() {
         return Math.max(0, 1 - (this.hatchTimer / HATCH_FRAMES));
     }

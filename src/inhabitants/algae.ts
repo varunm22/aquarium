@@ -434,6 +434,31 @@ export class Algae {
         return this.wallGrids;
     }
 
+    public getActiveCells(): Set<number> {
+        return this.activeCells;
+    }
+
+    public loadSaveState(data: Array<[number, number]>): void {
+        this.initializeWallGrids();
+        this.activeCells.clear();
+
+        for (const [encoded, level] of data) {
+            const decoded = this.decodeCell(encoded);
+            if (!decoded) continue;
+            const { wall, x, y } = decoded;
+            const wallDim = this.wallDimensions[wall];
+            if (x >= 0 && x < wallDim.gridCols && y >= 0 && y < wallDim.gridRows) {
+                this.wallGrids[wall][x][y] = level;
+                this.activeCells.add(encoded);
+            }
+        }
+
+        this.activeCellsArray = Array.from(this.activeCells);
+        this.frameCounter = 0;
+        this.lastHotspotUpdateFrame = -100;
+        this.requestHotspotUpdate();
+    }
+
     private generateOverlappingHotspots(regionSize: number, stepSize: number): AlgaeHotspot[] {
         const hotspots: AlgaeHotspot[] = [];
         const gridRegionSize = Math.ceil(regionSize / this.squareSize);

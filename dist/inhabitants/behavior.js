@@ -38,8 +38,12 @@ function isTargetInFieldOfView(fish, target, maxAngle = 45, maxDistance = 300) {
         const distance = fish.position.value.distanceTo(target.position.value);
         if (distance > maxDistance)
             return false;
-        const disp_norm = disp.divide(disp.magnitude());
-        const fish_dir = fish.position.delta.divide(fish.position.delta.magnitude());
+        const dispMag = disp.magnitude();
+        const deltaMag = fish.position.delta.magnitude();
+        if (dispMag === 0 || deltaMag === 0)
+            return false;
+        const disp_norm = disp.divide(dispMag);
+        const fish_dir = fish.position.delta.divide(deltaMag);
         const dotProduct = disp_norm.dotProduct(fish_dir);
         const angle = Math.acos(Math.max(-1, Math.min(1, dotProduct)));
         return (angle * 180 / Math.PI) <= maxAngle;

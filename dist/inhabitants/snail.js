@@ -11,8 +11,8 @@ const DEAD_FADE_FRAMES = 7200;
 const SHELL_GRAVITY = 0.5;
 // Reproduction & growth
 const EGG_HUNGER_THRESHOLD = 0.30;
-const EGG_MIN_SIZE = 15;
-const EGG_CHANCE_PER_FRAME = 0.0005;
+const EGG_MIN_SIZE = 20;
+const EGG_CHANCE_PER_FRAME = 0.001;
 const STARVATION_DEATH_CHANCE = 0.1;
 const POST_EGG_HUNGER_COST = 0.50;
 const GROWTH_HUNGER_COST = 0.05;
@@ -691,6 +691,20 @@ export class Snail extends Inhabitant {
     shouldBeRemoved() {
         return (this.lifeState === 'dead' && this.lifeStateCounter >= DEAD_FADE_FRAMES);
     }
+    getWall() { return this.wall; }
+    getLifeStateCounter() { return this.lifeStateCounter; }
+    getOpacity() { return this.opacity; }
+    getShellSettled() { return this.shellSettled; }
+    getCanSetGoals() { return this.canSetGoals; }
+    loadSaveState(state) {
+        this.lifeState = state.lifeState;
+        this.lifeStateCounter = state.lifeStateCounter;
+        this.eatingCounter = state.eatingCounter;
+        this.opacity = state.opacity;
+        this.shellSettled = state.shellSettled;
+        this.canSetGoals = state.canSetGoals;
+        this.position.delta = state.velocity;
+    }
     setRandomGoal() {
         if (!this.canSetGoals)
             return;
@@ -699,6 +713,9 @@ export class Snail extends Inhabitant {
         this.goal = { wall: goalWall, x: goalPosition.x, y: goalPosition.y };
         this.path = this.generatePath(this.goal);
         console.log(`🎯 Baby snail set random goal on ${goalWall} wall`);
+    }
+    getSpriteInfo() {
+        return this.getSpriteIndexAndRotation();
     }
     getSpriteIndexAndRotation() {
         const delta = this.position.delta;
