@@ -34,7 +34,7 @@ interface SpriteConfig {
 
 // Lifecycle timing (frames at 60fps)
 const EGG_LAYING_FRAMES = 120;
-const DEAD_FADE_FRAMES = 1800;
+const DEAD_FADE_FRAMES = 7200;
 const SHELL_GRAVITY = 0.5;
 
 // Reproduction & growth

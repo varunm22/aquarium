@@ -7,7 +7,7 @@ import { getTankBounds } from '../constants.js';
 import { WALL_CONFIG, world3DToWall2D, wall2DToWorld3D as sharedWall2DToWorld3D, wall2DToWorld3DVelocity as sharedWall2DVelocity, getWall2DBounds as sharedGetWall2DBounds, getOppositeWall, getAdjacentWalls } from '../wall-utils.js';
 // Lifecycle timing (frames at 60fps)
 const EGG_LAYING_FRAMES = 120;
-const DEAD_FADE_FRAMES = 1800;
+const DEAD_FADE_FRAMES = 7200;
 const SHELL_GRAVITY = 0.5;
 // Reproduction & growth
 const EGG_HUNGER_THRESHOLD = 0.30;
