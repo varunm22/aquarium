@@ -743,10 +743,10 @@ export class Snail extends Inhabitant {
         let mirrored;
         let baseRotation = 0;
         // Angle-based sprite mapping
-        // Side walls use wider front/back ranges and narrower vertical-motion ranges
+        // Side walls and bottom wall use wider front/back ranges and narrower horizontal-motion ranges
         // to better match the perspective viewing angle
-        const isSideWall = this.wall === 'left' || this.wall === 'right';
-        if (isSideWall) {
+        const usesWideRanges = this.wall === 'left' || this.wall === 'right' || this.wall === 'bottom';
+        if (usesWideRanges) {
             if (degrees >= 345 || degrees < 15) {
                 spriteIndex = 0;
                 mirrored = false;
@@ -777,6 +777,8 @@ export class Snail extends Inhabitant {
             }
         }
         else {
+            // This branch is now unused (front/back walls handled separately above)
+            // Keeping for safety, but should not be reached
             if (degrees >= 337.5 || degrees < 22.5) {
                 spriteIndex = 0;
                 mirrored = false;
@@ -851,6 +853,6 @@ Snail.SPRITE_CONFIGS = [
     { x: 137, y: 40, width: 33, height: 34 }, // 2: front
     { x: 181, y: 40, width: 28, height: 32 }, // 3: back
     { x: 108, y: 90, width: 43, height: 42 }, // 4: top (for back wall)
-    { x: 171, y: 89, width: 24, height: 38 }, // 5: bottom (for front wall)
+    { x: 174, y: 91, width: 28, height: 42 }, // 5: bottom (for front wall)
     { x: 25, y: 89, width: 34, height: 28 } // 6: empty shell
 ];

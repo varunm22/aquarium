@@ -2,6 +2,9 @@ import { EmberTetra } from './inhabitants/embertetra.js';
 import { UserFish } from './inhabitants/userfish.js';
 import { Fish } from './inhabitants/fish.js';
 import { Snail } from './inhabitants/snail.js';
+import { Microfauna } from './inhabitants/microfauna.js';
+import { Position } from './factors/position.js';
+import { Vector } from './vector.js';
 import { getTankBounds } from './constants.js';
 import { handleSave, handleLoad, isModalOpen } from './save-load.js';
 const CENTER = 'center';
@@ -14,12 +17,12 @@ export class SidePane {
         this.footerHeight = 40;
         this.mouseWasPressed = false;
         this.tabs = [
-            { id: 'fish', label: 'fish' },
-            { id: 'chem', label: 'chem' },
+            { id: 'fish', label: 'creatures' },
             { id: 'actions', label: 'actions' }
         ];
         this.fishViewMode = 'species';
         this.selectedSpecies = null;
+        this.microfaunaErrorMessage = null;
         this.tank = tank;
         this.x = tank.x + tank.width + 50;
         this.y = tank.y;
@@ -32,7 +35,7 @@ export class SidePane {
         window.addEventListener('wheel', (event) => this.handleScroll(event), { passive: false });
     }
     handleScroll(event) {
-        const hasFooter = this.selectedView === 'fish' && this.fishViewMode === 'individuals';
+        const hasFooter = this.selectedView === 'fish' && (this.fishViewMode === 'individuals' || this.fishViewMode === 'microfauna');
         const footerOffset = hasFooter ? this.footerHeight : 0;
         if (event.clientX >= this.x && event.clientX <= this.x + this.width &&
             event.clientY >= this.y + this.headerHeight && event.clientY <= this.y + this.height - footerOffset &&
@@ -54,13 +57,15 @@ export class SidePane {
     }
     renderFooter() {
         const footerY = this.y + this.height - this.footerHeight;
-        if (this.selectedView === 'fish' && this.fishViewMode === 'individuals') {
+        if (this.selectedView === 'fish' && (this.fishViewMode === 'individuals' || this.fishViewMode === 'microfauna')) {
             fill(220, 240, 255);
             stroke(150, 190, 210);
             strokeWeight(1);
             rect(this.x, footerY, this.width, this.footerHeight);
             this.renderBackButton(footerY);
-            this.renderAddNewButton(footerY);
+            if (this.fishViewMode === 'individuals') {
+                this.renderAddNewButton(footerY);
+            }
         }
     }
     renderBackButton(footerY) {
@@ -86,6 +91,7 @@ export class SidePane {
                 this.fishViewMode = 'species';
                 this.selectedSpecies = null;
                 this.scrollOffset = 0;
+                this.microfaunaErrorMessage = null; // Clear error when leaving microfauna view
             }
         }
     }
@@ -131,9 +137,6 @@ export class SidePane {
         rect(this.x, this.y, this.width, this.height);
         if (this.selectedView === 'fish') {
             this.renderFishView(tank);
-        }
-        else if (this.selectedView === 'chem') {
-            this.renderChemView();
         }
         else if (this.selectedView === 'actions') {
             this.renderActionsView();
@@ -187,6 +190,9 @@ export class SidePane {
         if (this.fishViewMode === 'species') {
             this.renderSpeciesView(tank);
         }
+        else if (this.fishViewMode === 'microfauna') {
+            this.renderMicrofaunaView(tank);
+        }
         else {
             this.renderIndividualsView(tank);
         }
@@ -194,9 +200,11 @@ export class SidePane {
     renderSpeciesView(tank) {
         const emberTetraCount = tank.fish.filter(fish => fish instanceof EmberTetra && !(fish instanceof UserFish)).length;
         const snailCount = tank.getSnails().length;
+        const microfaunaCount = tank.microfauna.length;
         const species = [
             { type: 'embertetra', count: emberTetraCount, label: 'Ember Tetras' },
-            { type: 'snail', count: snailCount, label: 'Snails' }
+            { type: 'snail', count: snailCount, label: 'Snails' },
+            { type: 'microfauna', count: microfaunaCount, label: 'Microfauna' }
         ];
         const totalHeight = species.length * this.rowHeight;
         const visibleRows = Math.floor((this.height - this.headerHeight) / this.rowHeight);
@@ -240,29 +248,166 @@ export class SidePane {
             }
         }
     }
-    renderChemView() {
+    renderMicrofaunaView(tank) {
+        const count = tank.microfauna.length;
+        const centerX = this.x + this.width / 2;
+        const contentTop = this.y + this.headerHeight;
+        const contentHeight = this.height - this.headerHeight - this.footerHeight;
+        // Position count and label in upper portion
+        const countY = contentTop + contentHeight * 0.25;
+        // Display large centered count
         fill(0, 0, 0);
-        textSize(12);
-        textAlign(LEFT, CENTER);
-        text('Coming soon', this.x + this.padding, this.y + this.headerHeight + this.rowHeight / 2);
-    }
-    renderActionsView() {
-        const buttonY = this.y + this.headerHeight + this.padding;
-        const buttonWidth = this.width - (this.padding * 2);
-        const buttonHeight = 40;
-        fill(100, 150, 255);
-        stroke(50, 100, 200);
+        noStroke();
+        textSize(48);
+        textAlign(CENTER, CENTER);
+        text(count.toString(), centerX, countY);
+        // Label
+        textSize(16);
+        const labelY = countY + 40;
+        text('Microfauna', centerX, labelY);
+        // Buttons just below the label
+        const buttonHeight = 30;
+        const buttonWidth = (this.width - this.padding * 4) / 3;
+        const buttonY = labelY + 30;
+        // Half button (first, red)
+        const halfX = this.x + this.padding;
+        fill(255, 100, 100);
+        stroke(200, 50, 50);
         strokeWeight(1);
-        rect(this.x + this.padding, buttonY, buttonWidth, buttonHeight);
+        rect(halfX, buttonY, buttonWidth, buttonHeight);
         fill(255, 255, 255);
         noStroke();
         textSize(14);
         textAlign(CENTER, CENTER);
-        text('Feed', this.x + this.padding + buttonWidth / 2, buttonY + buttonHeight / 2);
+        text('Half', halfX + buttonWidth / 2, buttonY + buttonHeight / 2);
+        // Plus button (middle)
+        const plusX = this.x + this.padding * 2 + buttonWidth;
+        fill(100, 150, 255);
+        stroke(50, 100, 200);
+        strokeWeight(1);
+        rect(plusX, buttonY, buttonWidth, buttonHeight);
+        fill(255, 255, 255);
+        noStroke();
+        textSize(18);
+        textAlign(CENTER, CENTER);
+        text('+', plusX + buttonWidth / 2, buttonY + buttonHeight / 2);
+        // Double button (last)
+        const doubleX = this.x + this.padding * 3 + buttonWidth * 2;
+        fill(100, 200, 100);
+        stroke(50, 150, 50);
+        strokeWeight(1);
+        rect(doubleX, buttonY, buttonWidth, buttonHeight);
+        fill(255, 255, 255);
+        noStroke();
+        textSize(14);
+        textAlign(CENTER, CENTER);
+        text('Double', doubleX + buttonWidth / 2, buttonY + buttonHeight / 2);
+        // Error message below buttons
+        if (this.microfaunaErrorMessage) {
+            fill(200, 50, 50);
+            noStroke();
+            textSize(12);
+            textAlign(CENTER, CENTER);
+            text(this.microfaunaErrorMessage, centerX, buttonY + buttonHeight + 20);
+        }
+        // Click handling
         if (this.mouseWasPressed && !mouseIsPressed) {
-            if (mouseX >= this.x + this.padding && mouseX <= this.x + this.padding + buttonWidth &&
-                mouseY >= buttonY && mouseY <= buttonY + buttonHeight) {
-                this.handleFeedAction();
+            // Clear error on any click
+            if (this.microfaunaErrorMessage) {
+                this.microfaunaErrorMessage = null;
+            }
+            if (mouseY >= buttonY && mouseY <= buttonY + buttonHeight &&
+                mouseX >= this.x && mouseX <= this.x + this.width) {
+                if (mouseX >= halfX && mouseX <= halfX + buttonWidth) {
+                    this.handleHalfMicrofauna();
+                }
+                else if (mouseX >= plusX && mouseX <= plusX + buttonWidth) {
+                    this.handleAddOneMicrofauna();
+                }
+                else if (mouseX >= doubleX && mouseX <= doubleX + buttonWidth) {
+                    this.handleDoubleMicrofauna();
+                }
+            }
+        }
+    }
+    handleDoubleMicrofauna() {
+        const currentCount = this.tank.microfauna.length;
+        if (currentCount * 2 > 2000) {
+            this.microfaunaErrorMessage = 'max microfauna count is 2000';
+            return;
+        }
+        const currentMicrofauna = [...this.tank.microfauna];
+        for (const micro of currentMicrofauna) {
+            // Create a duplicate at the same position
+            const newPosition = new Position(new Vector(micro.position.x, micro.position.y, micro.position.z), new Vector(0, 0, 0));
+            const newMicrofauna = new Microfauna(newPosition);
+            newMicrofauna.size = micro.size; // Copy the size
+            newMicrofauna.setTank(this.tank);
+            this.tank.addMicrofauna(newMicrofauna);
+        }
+    }
+    handleAddOneMicrofauna() {
+        const bounds = getTankBounds();
+        const x = random(bounds.min.x, bounds.max.x);
+        const y = random(bounds.min.y, bounds.max.y);
+        const z = random(bounds.min.z, bounds.max.z);
+        const position = new Position(new Vector(x, y, z), new Vector(0, 0, 0));
+        const microfauna = new Microfauna(position);
+        microfauna.setTank(this.tank);
+        this.tank.addMicrofauna(microfauna);
+    }
+    handleHalfMicrofauna() {
+        const microfauna = [...this.tank.microfauna];
+        const countToRemove = Math.floor(microfauna.length / 2);
+        // Shuffle array to randomize which ones to remove
+        for (let i = microfauna.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [microfauna[i], microfauna[j]] = [microfauna[j], microfauna[i]];
+        }
+        // Remove the first half
+        for (let i = 0; i < countToRemove; i++) {
+            const index = this.tank.microfauna.indexOf(microfauna[i]);
+            if (index > -1) {
+                this.tank.microfauna.splice(index, 1);
+            }
+        }
+    }
+    renderActionsView() {
+        const buttonWidth = this.width - (this.padding * 2);
+        const buttonHeight = 40;
+        const buttonGap = 10;
+        const buttonX = this.x + this.padding;
+        // Feed button
+        const feedY = this.y + this.headerHeight + this.padding;
+        fill(100, 150, 255);
+        stroke(50, 100, 200);
+        strokeWeight(1);
+        rect(buttonX, feedY, buttonWidth, buttonHeight);
+        fill(255, 255, 255);
+        noStroke();
+        textSize(14);
+        textAlign(CENTER, CENTER);
+        text('Feed', buttonX + buttonWidth / 2, feedY + buttonHeight / 2);
+        // Clean Algae button
+        const cleanY = feedY + buttonHeight + buttonGap;
+        fill(100, 180, 120);
+        stroke(50, 140, 80);
+        strokeWeight(1);
+        rect(buttonX, cleanY, buttonWidth, buttonHeight);
+        fill(255, 255, 255);
+        noStroke();
+        textSize(14);
+        textAlign(CENTER, CENTER);
+        text('Clean Algae', buttonX + buttonWidth / 2, cleanY + buttonHeight / 2);
+        // Click handling
+        if (this.mouseWasPressed && !mouseIsPressed) {
+            if (mouseX >= buttonX && mouseX <= buttonX + buttonWidth) {
+                if (mouseY >= feedY && mouseY <= feedY + buttonHeight) {
+                    this.handleFeedAction();
+                }
+                else if (mouseY >= cleanY && mouseY <= cleanY + buttonHeight) {
+                    this.handleCleanAlgaeAction();
+                }
             }
         }
     }
@@ -276,12 +421,15 @@ export class SidePane {
             }, i * 25);
         }
     }
+    handleCleanAlgaeAction() {
+        this.tank.algae.cleanAlgae();
+    }
     drawMaskingFrame(tank) {
         push();
         fill(255, 255, 255);
         noStroke();
         const headerBottom = this.y + this.headerHeight;
-        const hasFooter = this.selectedView === 'fish' && this.fishViewMode === 'individuals';
+        const hasFooter = this.selectedView === 'fish' && (this.fishViewMode === 'individuals' || this.fishViewMode === 'microfauna');
         const footerOffset = hasFooter ? this.footerHeight : 0;
         rect(this.x - 10, this.y - 20, this.width + 20, headerBottom - this.y + 20);
         rect(this.x - 10, this.y + this.height - footerOffset, this.width + 20, tank.height + 100);
@@ -307,6 +455,13 @@ export class SidePane {
             const spriteHeight = spriteConfig.height * sc;
             image(Snail.spritesheet, this.x + this.padding, y + (this.rowHeight - spriteHeight) / 2, spriteWidth, spriteHeight, spriteConfig.x, spriteConfig.y, spriteConfig.width, spriteConfig.height);
         }
+        else if (species.type === 'microfauna') {
+            // Draw a small black dot for microfauna
+            fill(0, 0, 0);
+            noStroke();
+            const dotSize = 8;
+            ellipse(this.x + this.padding + dotSize / 2, y + this.rowHeight / 2, dotSize, dotSize);
+        }
         push();
         textSize(12);
         fill(0, 0, 0);
@@ -318,7 +473,13 @@ export class SidePane {
             if (mouseX >= this.x && mouseX <= this.x + this.width &&
                 mouseY >= y && mouseY <= y + this.rowHeight) {
                 this.selectedSpecies = species.type;
-                this.fishViewMode = 'individuals';
+                if (species.type === 'microfauna') {
+                    this.fishViewMode = 'microfauna';
+                    this.microfaunaErrorMessage = null; // Clear error when entering microfauna view
+                }
+                else {
+                    this.fishViewMode = 'individuals';
+                }
                 this.scrollOffset = 0;
             }
         }

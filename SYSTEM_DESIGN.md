@@ -106,6 +106,11 @@ When close (< 40 units), refines to precise 8×8 grid search within a 40×40 reg
 ### Growth
 - Chance/frame: `(1 − hunger) / 400`. Size +1, hunger +0.05. Max size: 50.
 
+### Serialization Support
+- Public getters expose private state for save: `getWall()`, `getLifeState()`, `getLifeStateCounter()`, `getEatingCounter()`, `getOpacity()`, `getShellSettled()`, `getCanSetGoals()`
+- `loadSaveState(state)` restores lifecycle state, eating counter, opacity, shell status, goal-setting ability, and velocity in one call
+- `getSpriteInfo()` exposes sprite index, rotation, and mirror state for thumbnail rendering
+
 ### Rendering
 - 7 sprites: left, diagonal-front, front, back, top (back wall), bottom (front wall), empty shell
 - Wall-specific sprite/rotation selection based on movement direction
@@ -162,3 +167,42 @@ Provides snails with aggregated algae density information:
 - Reproduce: 0.4% base chance/frame, scales down with nearby count (max 20 within 100 units)
 - Movement: random drift with slight upward bias
 - Eaten by fish (detection scales with microfauna size: 0% at 1.5 → 100% at 3.5)
+
+---
+
+## Save/Load System
+
+State is serialized into a compact JSON format, compressed, and steganographically encoded into a PNG thumbnail image. Loading decodes the image to restore the full aquarium state.
+
+### Serialization (`serializeTank` / `deserializeTank`)
+All entity types are serialized with short keys for compactness:
+- **Fish**: position, velocity, size, hunger, initiative, fear
+- **Snails**: position, velocity, size, wall, hunger, life state, life state counter, eating counter, opacity, shell settled, can set goals
+- **Microfauna**: position, velocity, size
+- **Food**: position, in-water, floating, settled flags
+- **Egg clumps**: position, wall, hatch timer
+- **Algae**: active cells as `[encodedPosition, level]` pairs
+
+Deserialization clears existing tank state and reconstructs all entities. Fish are given a small random velocity if their saved velocity rounds to zero, to avoid division-by-zero in field-of-view calculations.
+
+### Compression
+Uses the browser's native `CompressionStream` / `DecompressionStream` API with `deflate-raw` encoding. Typical state compresses from ~800–1000 bytes JSON to ~400–600 bytes.
+
+### LSB Steganography
+Data is embedded in the 2 least significant bits of each RGB channel (alpha untouched). Each pixel stores 6 bits of data.
+- **Header**: 2-byte magic (`0x41 0x51` = "AQ") + 4-byte little-endian data length
+- **Capacity**: 200×123 image → ~18KB, far exceeding typical ~600-byte compressed state
+- **Constraint**: Image must remain as lossless PNG — JPEG or chat-app compression destroys the encoded data
+
+### Thumbnail Rendering
+A custom renderer draws a stylized 200×123 thumbnail (not a canvas screenshot):
+- **Margin**: 8px padding around the tank
+- **Tank frame**: Front face border, back face rectangle (0.7× scale), four connecting perspective edges, water lines
+- **Background**: Light blue-gray fill with semi-transparent water tint
+- **Organisms**: Fish and snail sprites drawn at 2.5× inflated size using actual spritesheets and correct sprite selection (direction, wall, mirroring, rotation)
+- **Omitted**: Food, microfauna, algae, egg clumps, gravel images — only a simple gravel strip is drawn
+
+### UI
+- **Save/Load buttons**: Rendered below the side pane in the p5.js canvas. Click-guarded by `isModalOpen()` to prevent double-opens.
+- **Save modal**: Shows thumbnail preview at 2× display size, download button (timestamped filename), copy-to-clipboard button, compression stats
+- **Load modal**: Drag-and-drop zone or file picker for PNG images. Shows image preview, entity count summary, and load button. Validates magic number before enabling load.

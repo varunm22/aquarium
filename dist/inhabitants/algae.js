@@ -357,6 +357,23 @@ export class Algae {
     getActiveCells() {
         return this.activeCells;
     }
+    cleanAlgae() {
+        const cellsToProcess = Array.from(this.activeCells);
+        for (const encodedCell of cellsToProcess) {
+            const decoded = this.decodeCell(encodedCell);
+            if (!decoded)
+                continue;
+            const { wall, x, y } = decoded;
+            const level = this.wallGrids[wall][x][y];
+            if (level > 0 && Math.random() < 0.5) {
+                this.wallGrids[wall][x][y] = level - 1;
+                if (level - 1 === 0) {
+                    this.activeCells.delete(encodedCell);
+                }
+            }
+        }
+        this.activeCellsArray = Array.from(this.activeCells);
+    }
     loadSaveState(data) {
         this.initializeWallGrids();
         this.activeCells.clear();
